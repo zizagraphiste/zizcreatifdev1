@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "zizcreatifdev",
+      "runtimeExecutable": "/usr/local/bin/npx",
+      "runtimeArgs": ["vite"],
+      "port": 5173
+    }
+  ]
+}

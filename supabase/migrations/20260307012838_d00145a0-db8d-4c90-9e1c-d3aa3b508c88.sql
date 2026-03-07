@@ -1,0 +1,2 @@
+ALTER TABLE public.products DROP CONSTRAINT products_type_check;
+ALTER TABLE public.products ADD CONSTRAINT products_type_check CHECK (type = ANY (ARRAY['guide'::text, 'masterclass'::text, 'app'::text, 'book'::text, 'formation'::text]));

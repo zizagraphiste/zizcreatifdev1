@@ -1,0 +1,4 @@
+project_id = "ekfisyrfvxurdaabdnpl"
+
+[functions.free-resource-url]
+verify_jwt = false
