@@ -11,6 +11,7 @@ import AdminPromoCodes from "@/components/admin/AdminPromoCodes";
 import AdminMentorMessages from "@/components/admin/AdminMentorMessages";
 import AdminFormations from "@/components/admin/AdminFormations";
 import AdminPaymentSettings from "@/components/admin/AdminPaymentSettings";
+import AdminComptabilite from "@/components/admin/AdminComptabilite";
 
 export default function Admin() {
   return (
@@ -20,6 +21,7 @@ export default function Admin() {
         <Route path="products" element={<AdminProducts />} />
         <Route path="formations" element={<AdminFormations />} />
         <Route path="registrations" element={<AdminRegistrations />} />
+        <Route path="comptabilite" element={<AdminComptabilite />} />
         <Route path="resources" element={<AdminResources />} />
         <Route path="emails" element={<AdminEmails />} />
         <Route path="site-content" element={<AdminSiteContent />} />
