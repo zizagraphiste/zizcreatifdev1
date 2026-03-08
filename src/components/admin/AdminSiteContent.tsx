@@ -47,7 +47,7 @@ function FocalPointPicker({ imageUrl, value, onChange }: { imageUrl: string; val
       <div
         ref={containerRef}
         onClick={handleClick}
-        className="relative cursor-crosshair rounded-lg overflow-hidden border border-border h-48"
+        className="relative cursor-crosshair rounded-xl overflow-hidden border border-border aspect-video"
       >
         <img src={imageUrl} alt="" className="w-full h-full object-cover" style={{ objectPosition: `${x}% ${y}%` }} />
         <div
@@ -83,26 +83,52 @@ function ImageUploadField({ itemKey, value, onChange }: { itemKey: string; value
     toast.success("Image uploadée ✓");
   };
 
+  const isHero = itemKey.startsWith("hero");
+
   return (
     <div className="space-y-3">
       <div
         onClick={() => !uploading && fileRef.current?.click()}
-        className="relative cursor-pointer rounded-lg border-2 border-dashed border-border hover:border-primary/50 transition-colors overflow-hidden"
+        className="relative cursor-pointer rounded-xl border-2 border-dashed border-border hover:border-primary/50 transition-colors overflow-hidden group"
       >
         {value ? (
-          <img src={value} alt="Couverture" className="w-full h-48 object-cover" />
+          <>
+            <img
+              src={value}
+              alt="Couverture"
+              className={isHero ? "w-full aspect-video object-cover" : "w-full h-48 object-cover"}
+            />
+            {/* Overlay au hover */}
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <div className="flex items-center gap-2 text-white text-sm font-medium">
+                <ImagePlus className="h-5 w-5" />
+                Changer l'image
+              </div>
+            </div>
+          </>
         ) : (
-          <div className="h-32 flex flex-col items-center justify-center text-muted-foreground gap-2">
+          <div className={`${isHero ? "aspect-video" : "h-32"} flex flex-col items-center justify-center text-muted-foreground gap-2`}>
             <ImagePlus className="h-8 w-8" />
             <p className="text-xs">{uploading ? "Upload en cours…" : "Cliquer pour ajouter une image"}</p>
+            {isHero && <p className="text-[11px] opacity-60">Format recommandé : 1920 × 1080 px</p>}
+          </div>
+        )}
+        {uploading && (
+          <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
+            <p className="text-sm text-primary font-medium animate-pulse">Upload en cours…</p>
           </div>
         )}
       </div>
       <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
       {value && (
-        <Button variant="ghost" size="sm" className="text-xs text-destructive gap-1" onClick={() => onChange("")}>
-          <Trash2 className="h-3 w-3" /> Supprimer l'image
-        </Button>
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] text-muted-foreground">
+            {isHero ? "Aperçu en proportion 16:9 (taille réelle sur desktop)" : ""}
+          </p>
+          <Button variant="ghost" size="sm" className="text-xs text-destructive gap-1" onClick={() => onChange("")}>
+            <Trash2 className="h-3 w-3" /> Supprimer l'image
+          </Button>
+        </div>
       )}
     </div>
   );
