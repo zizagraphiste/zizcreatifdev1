@@ -32,12 +32,23 @@ export function AvatarCircle({ name, avatarUrl, size = "md", className }: Avatar
   const { container, text } = sizeMap[size];
 
   if (avatarUrl) {
+    /* Enveloppe div pour garantir le format carré → cercle parfait sans déformation */
     return (
-      <img
-        src={avatarUrl}
-        alt={name || "Avatar"}
-        className={cn("rounded-full object-cover shrink-0 ring-2 ring-background", container, className)}
-      />
+      <div
+        className={cn(
+          "rounded-full shrink-0 ring-2 ring-background overflow-hidden",
+          container,
+          className
+        )}
+        style={{ aspectRatio: "1 / 1" }}
+      >
+        <img
+          src={avatarUrl}
+          alt={name || "Avatar"}
+          className="w-full h-full object-cover object-center"
+          style={{ display: "block" }}
+        />
+      </div>
     );
   }
 

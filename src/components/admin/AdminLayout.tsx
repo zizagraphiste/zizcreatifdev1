@@ -87,14 +87,26 @@ function SidebarContent({
           Page d'accueil
         </NavLink>
 
-        {/* Profil admin dans sidebar */}
-        <div className="flex items-center gap-3 rounded-lg px-3 py-2">
+        {/* Profil admin dans sidebar — cliquable → /admin/profile */}
+        <NavLink
+          to="/admin/profile"
+          onClick={onClose}
+          className={({ isActive }) =>
+            cn(
+              "flex items-center gap-3 rounded-lg px-3 py-2 transition-colors group",
+              isActive ? "bg-primary/10 ring-1 ring-primary/20" : "hover:bg-muted/60"
+            )
+          }
+        >
           <AvatarCircle name={adminProfile?.full_name || user?.email} avatarUrl={adminProfile?.avatar_url} size="sm" />
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium text-foreground truncate">{adminProfile?.full_name || "Admin"}</p>
             <p className="text-[10px] text-muted-foreground truncate">{user?.email}</p>
           </div>
-        </div>
+          <span className="text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0 text-xs">
+            ✎
+          </span>
+        </NavLink>
 
         <button
           onClick={signOut}
@@ -161,13 +173,16 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
           <div className="hidden lg:block" />
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            {/* Avatar admin dans la topbar (desktop) */}
-            <div className="hidden lg:flex items-center gap-2">
+            {/* Avatar admin dans la topbar (desktop) — cliquable → /admin/profile */}
+            <NavLink
+              to="/admin/profile"
+              className="hidden lg:flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-muted/60 transition-colors"
+            >
               <AvatarCircle name={adminProfile?.full_name || user?.email} avatarUrl={adminProfile?.avatar_url} size="sm" />
               <span className="text-sm text-muted-foreground font-medium hidden xl:block">
                 {adminProfile?.full_name || "Admin"}
               </span>
-            </div>
+            </NavLink>
           </div>
         </div>
         <div className="p-4 lg:p-6">{children}</div>

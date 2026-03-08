@@ -285,7 +285,9 @@ export default function Member() {
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle />
-          <AvatarCircle name={profile.full_name || user?.email} avatarUrl={profile.avatar_url} size="sm" />
+          <Link to="/member/profile">
+            <AvatarCircle name={profile.full_name || user?.email} avatarUrl={profile.avatar_url} size="sm" className="cursor-pointer hover:opacity-80 transition-opacity" />
+          </Link>
           <Button variant="ghost" size="sm" onClick={signOut} className="gap-1.5 text-muted-foreground hover:text-destructive">
             <LogOut className="h-4 w-4" />
             <span className="hidden sm:block">Déconnexion</span>

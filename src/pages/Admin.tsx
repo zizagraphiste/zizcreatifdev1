@@ -13,6 +13,7 @@ import AdminFormations from "@/components/admin/AdminFormations";
 import AdminPaymentSettings from "@/components/admin/AdminPaymentSettings";
 import AdminComptabilite from "@/components/admin/AdminComptabilite";
 import AdminActivites from "@/components/admin/AdminActivites";
+import AdminProfilePage from "@/components/admin/AdminProfilePage";
 
 export default function Admin() {
   return (
@@ -31,6 +32,7 @@ export default function Admin() {
         <Route path="promo-codes" element={<AdminPromoCodes />} />
         <Route path="mentor" element={<AdminMentorMessages />} />
         <Route path="payment-settings" element={<AdminPaymentSettings />} />
+        <Route path="profile" element={<AdminProfilePage />} />
       </Routes>
     </AdminLayout>
   );
