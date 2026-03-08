@@ -1,12 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import {
   LayoutDashboard, Package, Users, FolderOpen, Mail, LogOut,
   Home, FileText, Tags, Ticket, MessageCircle, GraduationCap,
   Smartphone, TrendingUp, Menu, X, CalendarHeart,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { AvatarCircle } from "@/components/ui/AvatarCircle";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -25,15 +27,19 @@ const navItems = [
   { label: "Page d'accueil", path: "/admin/site-content", icon: FileText },
 ];
 
+type AdminProfile = { full_name: string | null; avatar_url: string | null };
+
 function SidebarContent({
   location,
   signOut,
   user,
+  adminProfile,
   onClose,
 }: {
   location: { pathname: string };
   signOut: () => void;
   user: any;
+  adminProfile: AdminProfile | null;
   onClose: () => void;
 }) {
   return (
@@ -43,22 +49,16 @@ function SidebarContent({
           Ziz<span className="text-primary">creatif</span>
         </span>
         <span className="text-xs text-muted-foreground font-light">.dev</span>
-        <button
-          className="ml-auto lg:hidden p-1 text-muted-foreground hover:text-foreground rounded"
-          onClick={onClose}
-        >
+        <button className="ml-auto lg:hidden p-1 text-muted-foreground hover:text-foreground rounded" onClick={onClose}>
           <X className="h-5 w-5" />
         </button>
       </div>
 
       <nav className="flex-1 space-y-1 px-3 py-4 overflow-y-auto">
         {navItems.map((item) => {
-          const isActive =
-            item.path === "/admin"
-              ? location.pathname === "/admin"
-              : location.pathname === item.path ||
-                (item.path !== "/admin" && location.pathname.startsWith(item.path));
-
+          const isActive = item.path === "/admin"
+            ? location.pathname === "/admin"
+            : location.pathname === item.path || (item.path !== "/admin" && location.pathname.startsWith(item.path));
           return (
             <NavLink
               key={item.path}
@@ -66,9 +66,7 @@ function SidebarContent({
               onClick={onClose}
               className={cn(
                 "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                isActive
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-primary/5 hover:text-foreground"
+                isActive ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-primary/5 hover:text-foreground"
               )}
             >
               <item.icon className="h-4 w-4 shrink-0" />
@@ -78,6 +76,7 @@ function SidebarContent({
         })}
       </nav>
 
+      {/* Footer sidebar — profil admin */}
       <div className="border-t border-border p-3 space-y-2 shrink-0">
         <NavLink
           to="/"
@@ -87,7 +86,16 @@ function SidebarContent({
           <Home className="h-4 w-4" />
           Page d'accueil
         </NavLink>
-        <p className="truncate px-3 text-xs text-muted-foreground">{user?.email}</p>
+
+        {/* Profil admin dans sidebar */}
+        <div className="flex items-center gap-3 rounded-lg px-3 py-2">
+          <AvatarCircle name={adminProfile?.full_name || user?.email} avatarUrl={adminProfile?.avatar_url} size="sm" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium text-foreground truncate">{adminProfile?.full_name || "Admin"}</p>
+            <p className="text-[10px] text-muted-foreground truncate">{user?.email}</p>
+          </div>
+        </div>
+
         <button
           onClick={signOut}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
@@ -104,52 +112,63 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   const { signOut, user } = useAuth();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [adminProfile, setAdminProfile] = useState<AdminProfile | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase.from("profiles").select("full_name, avatar_url").eq("id", user.id).single().then(({ data }) => {
+      if (data) setAdminProfile(data as AdminProfile);
+    });
+  }, [user]);
 
   const sharedProps = {
     location,
     signOut,
     user,
+    adminProfile,
     onClose: () => setSidebarOpen(false),
   };
 
   return (
     <div className="flex min-h-screen bg-background">
-      {/* ── Desktop sidebar (always visible ≥ lg) ── */}
+      {/* Desktop sidebar */}
       <aside className="hidden lg:flex fixed inset-y-0 left-0 z-40 w-60 flex-col border-r border-border bg-[#EDEAE2] dark:bg-[#060610]">
         <SidebarContent {...sharedProps} />
       </aside>
 
-      {/* ── Mobile: backdrop ── */}
+      {/* Mobile: backdrop */}
       {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
+        <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* ── Mobile: sidebar drawer ── */}
-      <aside
-        className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-border bg-[#EDEAE2] dark:bg-[#060610] transition-transform duration-300 ease-in-out lg:hidden",
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        )}
-      >
+      {/* Mobile: sidebar drawer */}
+      <aside className={cn(
+        "fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-border bg-[#EDEAE2] dark:bg-[#060610] transition-transform duration-300 ease-in-out lg:hidden",
+        sidebarOpen ? "translate-x-0" : "-translate-x-full"
+      )}>
         <SidebarContent {...sharedProps} />
       </aside>
 
-      {/* ── Main content ── */}
+      {/* Main content */}
       <main className="lg:ml-60 flex-1 min-h-screen w-full overflow-x-hidden">
         <div className="flex h-16 items-center justify-between border-b border-border px-4 lg:px-6">
-          {/* Hamburger mobile */}
           <button
             className="lg:hidden flex items-center gap-2 rounded-lg p-2 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
             onClick={() => setSidebarOpen(true)}
-            aria-label="Ouvrir le menu"
           >
             <Menu className="h-5 w-5" />
           </button>
           <div className="hidden lg:block" />
-          <ThemeToggle />
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+            {/* Avatar admin dans la topbar (desktop) */}
+            <div className="hidden lg:flex items-center gap-2">
+              <AvatarCircle name={adminProfile?.full_name || user?.email} avatarUrl={adminProfile?.avatar_url} size="sm" />
+              <span className="text-sm text-muted-foreground font-medium hidden xl:block">
+                {adminProfile?.full_name || "Admin"}
+              </span>
+            </div>
+          </div>
         </div>
         <div className="p-4 lg:p-6">{children}</div>
       </main>

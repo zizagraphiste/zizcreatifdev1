@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MessageCircle, Send, Clock } from "lucide-react";
+import { AvatarCircle } from "@/components/ui/AvatarCircle";
+import { Send, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { format, differenceInMonths } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -18,131 +18,170 @@ type Message = {
   created_at: string;
 };
 
+type UserProfile = { full_name: string | null; avatar_url: string | null; created_at: string };
+type AdminProfile = { full_name: string | null; avatar_url: string | null };
+
 export default function MentorChat() {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
-  const [memberSince, setMemberSince] = useState<Date | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [adminProfile, setAdminProfile] = useState<AdminProfile | null>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { if (user) fetchAll(); }, [user]);
 
   useEffect(() => {
-    if (!user) return;
-    fetchMessages();
-    fetchProfile();
-  }, [user]);
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
-  const fetchProfile = async () => {
-    const { data } = await supabase
-      .from("profiles")
-      .select("created_at")
-      .eq("id", user!.id)
-      .single();
-    if (data) setMemberSince(new Date(data.created_at));
-  };
-
-  const fetchMessages = async () => {
+  const fetchAll = async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from("mentor_messages")
-      .select("id, message, admin_reply, replied_at, created_at")
-      .eq("user_id", user!.id)
-      .order("created_at", { ascending: false });
-    setMessages((data as Message[]) || []);
+    const [{ data: prof }, { data: msgs }, { data: adminRoles }] = await Promise.all([
+      supabase.from("profiles").select("full_name, avatar_url, created_at").eq("id", user!.id).single(),
+      supabase.from("mentor_messages").select("id, message, admin_reply, replied_at, created_at").eq("user_id", user!.id).order("created_at", { ascending: true }),
+      supabase.from("user_roles").select("user_id").eq("role", "admin").limit(1),
+    ]);
+    setUserProfile((prof as any) || null);
+    setMessages((msgs as Message[]) || []);
+
+    if ((adminRoles as any[])?.[0]?.user_id) {
+      const { data: ap } = await supabase.from("profiles").select("full_name, avatar_url").eq("id", (adminRoles as any[])[0].user_id).single();
+      setAdminProfile((ap as any) || null);
+    }
     setLoading(false);
   };
 
-  // Calculate remaining credits: 4/month accumulating since signup
-  const totalAllowed = memberSince
-    ? (differenceInMonths(new Date(), memberSince) + 1) * 4
-    : 4;
-  const totalUsed = messages.length;
-  const remaining = Math.max(0, totalAllowed - totalUsed);
+  const memberSince = userProfile?.created_at ? new Date(userProfile.created_at) : null;
+  const totalAllowed = memberSince ? (differenceInMonths(new Date(), memberSince) + 1) * 4 : 4;
+  const remaining = Math.max(0, totalAllowed - messages.length);
+  const adminName = adminProfile?.full_name || "Mentor";
 
   const handleSend = async () => {
     if (!text.trim() || remaining <= 0) return;
     setSending(true);
-    const { error } = await supabase
-      .from("mentor_messages")
-      .insert({ user_id: user!.id, message: text.trim() });
+    const { error } = await supabase.from("mentor_messages").insert({ user_id: user!.id, message: text.trim() });
     if (error) { toast.error(error.message); setSending(false); return; }
-    toast.success("Message envoyé au mentor !");
     setText("");
     setSending(false);
-    fetchMessages();
+    fetchAll();
   };
 
+  const fmt = (d: string) => format(new Date(d), "dd MMM · HH:mm", { locale: fr });
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
-          <MessageCircle className="h-5 w-5 text-primary" />
-          Parler au Mentor
-        </h2>
-        <Badge variant="outline" className="gap-1">
+    <div className="flex flex-col">
+      {/* Header — profil mentor */}
+      <div className="flex items-center justify-between pb-4 border-b border-border mb-4">
+        <div className="flex items-center gap-3">
+          <AvatarCircle name={adminName} avatarUrl={adminProfile?.avatar_url} size="md" />
+          <div>
+            <p className="font-semibold text-foreground text-sm">{adminName}</p>
+            <p className="text-xs text-muted-foreground">Ton mentor · disponible</p>
+          </div>
+        </div>
+        <Badge variant="outline" className="gap-1.5 text-xs">
           <Clock className="h-3 w-3" />
           {remaining} message{remaining !== 1 ? "s" : ""} restant{remaining !== 1 ? "s" : ""}
         </Badge>
       </div>
 
-      {/* Send form */}
-      <Card className="border-primary/20">
-        <CardContent className="pt-6 space-y-3">
-          <Textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder={remaining > 0 ? "Pose ta question au mentor, partage ton problème ou demande un conseil mindset..." : "Tu as utilisé tous tes messages ce mois-ci. Tes crédits se renouvellent chaque mois."}
-            rows={4}
-            disabled={remaining <= 0}
-          />
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">
-              4 messages/mois · Les crédits non utilisés s'accumulent
+      {/* Conversation */}
+      <div className="space-y-5 overflow-y-auto pb-4 max-h-[55vh] pr-1">
+        {loading ? (
+          <p className="text-muted-foreground text-sm animate-pulse text-center py-8">Chargement…</p>
+        ) : messages.length === 0 ? (
+          <div className="text-center py-10 text-muted-foreground space-y-3">
+            <div className="flex justify-center">
+              <AvatarCircle name={adminName} avatarUrl={adminProfile?.avatar_url} size="lg" />
+            </div>
+            <p className="font-medium text-foreground text-sm">
+              Bonjour {userProfile?.full_name?.split(" ")[0] || ""} 👋
             </p>
-            <Button onClick={handleSend} disabled={!text.trim() || remaining <= 0 || sending} className="gap-2">
-              <Send className="h-4 w-4" /> Envoyer
-            </Button>
+            <p className="text-xs max-w-xs mx-auto leading-relaxed">
+              Pose ta question, partage ton blocage ou demande un conseil au mentor.
+              Tu as <strong className="text-foreground">{remaining}</strong> messages disponibles.
+            </p>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Message history */}
-      {loading ? (
-        <p className="text-muted-foreground animate-pulse">Chargement…</p>
-      ) : messages.length === 0 ? (
-        <div className="text-center py-10 text-muted-foreground">
-          <p>Tu n'as pas encore envoyé de message.</p>
-          <p className="text-sm mt-1">Profite de tes {remaining} crédits pour poser une question !</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {messages.map((m) => (
-            <Card key={m.id} className="border-border">
-              <CardContent className="pt-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-muted-foreground">
-                    {format(new Date(m.created_at), "dd MMM yyyy à HH:mm", { locale: fr })}
-                  </p>
-                  {m.admin_reply ? (
-                    <Badge className="bg-emerald-500/15 text-emerald-500 border-emerald-500/30 hover:bg-emerald-500/15 text-xs">
-                      Répondu
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="text-xs">En attente</Badge>
-                  )}
-                </div>
-                <p className="text-foreground whitespace-pre-wrap">{m.message}</p>
-                {m.admin_reply && (
-                  <div className="rounded-lg bg-primary/5 p-4 border-l-4 border-primary">
-                    <p className="text-xs text-primary font-semibold mb-1">Réponse du mentor</p>
-                    <p className="text-foreground whitespace-pre-wrap">{m.admin_reply}</p>
+        ) : (
+          messages.map((m) => (
+            <div key={m.id} className="space-y-3">
+              {/* Bulle utilisateur — droite */}
+              <div className="flex items-end gap-2 justify-end">
+                <div className="max-w-[78%]">
+                  <div className="bg-primary text-primary-foreground rounded-2xl rounded-br-sm px-4 py-3 shadow-sm">
+                    <p className="text-sm whitespace-pre-wrap leading-relaxed">{m.message}</p>
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+                  <p className="text-[10px] text-muted-foreground mt-1 text-right pr-1">
+                    {fmt(m.created_at)}
+                    {!m.admin_reply && <span className="ml-1.5 opacity-60">· En attente</span>}
+                  </p>
+                </div>
+                <AvatarCircle name={userProfile?.full_name} avatarUrl={userProfile?.avatar_url} size="sm" />
+              </div>
+
+              {/* Bulle admin — gauche */}
+              {m.admin_reply && (
+                <div className="flex items-end gap-2">
+                  <AvatarCircle name={adminName} avatarUrl={adminProfile?.avatar_url} size="sm" />
+                  <div className="max-w-[78%]">
+                    <p className="text-[10px] text-muted-foreground mb-1 ml-1 font-medium">{adminName}</p>
+                    <div className="bg-card border border-border rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm">
+                      <p className="text-sm whitespace-pre-wrap leading-relaxed text-foreground">{m.admin_reply}</p>
+                    </div>
+                    {m.replied_at && (
+                      <p className="text-[10px] text-muted-foreground mt-1 ml-1">{fmt(m.replied_at)}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Zone de saisie */}
+      <div className="mt-4 pt-4 border-t border-border">
+        {remaining <= 0 ? (
+          <div className="rounded-xl bg-muted/40 border border-border p-4 text-center">
+            <p className="text-sm text-muted-foreground">
+              Crédits épuisés. 4 messages/mois s'accumulent chaque mois depuis ton inscription.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="flex items-end gap-2">
+              <AvatarCircle name={userProfile?.full_name} avatarUrl={userProfile?.avatar_url} size="sm" className="mb-0.5 shrink-0" />
+              <div className="flex-1 relative">
+                <Textarea
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  placeholder="Écris ton message…"
+                  rows={3}
+                  className="resize-none pr-12"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); handleSend(); }
+                  }}
+                />
+                <Button
+                  size="icon"
+                  className="absolute bottom-2 right-2 h-8 w-8 bg-primary text-primary-foreground"
+                  onClick={handleSend}
+                  disabled={!text.trim() || sending}
+                >
+                  <Send className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+            <p className="text-[10px] text-muted-foreground text-right">
+              ⌘+Entrée pour envoyer · {remaining} message{remaining !== 1 ? "s" : ""} restant{remaining !== 1 ? "s" : ""}
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

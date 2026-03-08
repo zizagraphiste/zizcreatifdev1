@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowRight, Sparkles, BookOpen, Users, Zap, MapPin, Video, Calendar, Clock, UserCheck, CalendarHeart } from "lucide-react";
 
-const ACTIVITY_TYPES = ["masterclass", "coaching", "diner", "weekend"];
+// Activity types are fetched dynamically from the DB — no hardcoded list here
 
 
 type Category = { id: string; name: string; sort_order: number };
@@ -365,11 +365,11 @@ function ProductsSection({ get }: { get: (key: string, fb: string) => string }) 
           .select("id, title, description, thumbnail_emoji, cover_image_url, type, price, currency, max_spots, spots_taken, delivery_mode, status, category_id")
           .in("status", ["active", "closed"])
           .neq("type", "formation")
-          .not("type", "in", `(${ACTIVITY_TYPES.map(t => `"${t}"`).join(",")})`)
+          .neq("delivery_mode", "scheduled")
           .order("created_at", { ascending: false }),
         supabase.from("categories").select("*").order("sort_order"),
       ]);
-      setProducts((prodRes.data || []).filter(p => p.type !== "formation" && !ACTIVITY_TYPES.includes(p.type || "")));
+      setProducts((prodRes.data || []).filter(p => p.type !== "formation" && p.delivery_mode !== "scheduled"));
       setCategories((catRes.data as Category[]) || []);
       setLoading(false);
     })();
@@ -580,16 +580,11 @@ function FormationsSection() {
 }
 
 // ── Activity type display config ──
-const ACTIVITY_INFO: Record<string, { label: string; emoji: string; color: string }> = {
-  masterclass: { label: "Masterclass", emoji: "🎤", color: "text-purple-500 bg-purple-500/10" },
-  coaching:    { label: "Coaching one-to-one", emoji: "🎯", color: "text-blue-500 bg-blue-500/10" },
-  diner:       { label: "Dîner avec le mentor", emoji: "🍽️", color: "text-amber-500 bg-amber-500/10" },
-  weekend:     { label: "Week-end Détox", emoji: "🌿", color: "text-green-500 bg-green-500/10" },
-};
+type ActivityTypeInfo = { value: string; label: string; emoji: string };
 
-function ActivityCard({ product, index }: { product: Product; index: number }) {
+function ActivityCard({ product, index, typeMap }: { product: Product; index: number; typeMap: Record<string, ActivityTypeInfo> }) {
   const navigate = useNavigate();
-  const info = ACTIVITY_INFO[product.type || ""] || { label: product.type, emoji: "📅", color: "text-primary bg-primary/10" };
+  const info = typeMap[product.type || ""] || { label: product.type || "Activité", emoji: "📅" };
   const unlimited = product.max_spots === 0;
   const spotsLeft = unlimited ? Infinity : product.max_spots - (product.spots_taken || 0);
   const isClosed = product.status === "closed" || (!unlimited && spotsLeft <= 0);
@@ -611,7 +606,7 @@ function ActivityCard({ product, index }: { product: Product; index: number }) {
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
         <div className="absolute top-3 left-3">
-          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold backdrop-blur-sm ${info.color}`}>{info.emoji} {info.label}</span>
+          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold backdrop-blur-sm text-primary bg-primary/20">{info.emoji} {info.label}</span>
         </div>
         {isClosed && <div className="absolute top-3 right-3"><Badge className="bg-destructive text-destructive-foreground text-xs">Complet</Badge></div>}
         <div className="absolute bottom-3 left-3">
@@ -655,22 +650,36 @@ function ActivityCard({ product, index }: { product: Product; index: number }) {
 
 function ActivitesSection() {
   const [activities, setActivities] = useState<Product[]>([]);
+  const [activityTypes, setActivityTypes] = useState<ActivityTypeInfo[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
+      // 1. Fetch activity types from DB
+      const { data: typesData } = await supabase
+        .from("activity_types" as any)
+        .select("value, label, emoji")
+        .order("sort_order", { ascending: true });
+      const types: ActivityTypeInfo[] = (typesData as any[]) || [];
+      setActivityTypes(types);
+
+      if (types.length === 0) { setLoading(false); return; }
+
+      // 2. Fetch activities whose type is in the DB list
       const { data } = await supabase
         .from("products")
         .select("id, title, description, thumbnail_emoji, cover_image_url, type, price, currency, max_spots, spots_taken, delivery_mode, delivery_date, event_time, attendance_mode, venue, date_mode, status, category_id")
-        .in("type", ACTIVITY_TYPES)
+        .in("type", types.map((t) => t.value))
         .eq("status", "active")
         .order("delivery_date", { ascending: true, nullsFirst: false });
-      setActivities(data || []);
+      setActivities((data as Product[]) || []);
       setLoading(false);
     })();
   }, []);
 
   if (!loading && activities.length === 0) return null;
+
+  const typeMap: Record<string, ActivityTypeInfo> = Object.fromEntries(activityTypes.map((t) => [t.value, t]));
 
   return (
     <section className="py-20 px-4 sm:px-6" id="activites">
@@ -686,16 +695,18 @@ function ActivitesSection() {
             Coaching individuel, masterclass live, dîners exclusifs, week-ends de transformation — des expériences uniques avec le mentor.
           </motion.p>
         </div>
-        <div className="flex flex-wrap justify-center gap-2">
-          {Object.values(ACTIVITY_INFO).map((info) => (
-            <span key={info.label} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${info.color}`}>{info.emoji} {info.label}</span>
-          ))}
-        </div>
+        {activityTypes.length > 0 && (
+          <div className="flex flex-wrap justify-center gap-2">
+            {activityTypes.map((t) => (
+              <span key={t.value} className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium text-primary bg-primary/10">{t.emoji} {t.label}</span>
+            ))}
+          </div>
+        )}
         {loading ? (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">{[1, 2].map((i) => <div key={i} className="h-72 rounded-2xl bg-muted animate-pulse" />)}</div>
         ) : (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {activities.map((p, i) => <ActivityCard key={p.id} product={p} index={i} />)}
+            {activities.map((p, i) => <ActivityCard key={p.id} product={p} index={i} typeMap={typeMap} />)}
           </div>
         )}
       </div>

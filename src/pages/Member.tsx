@@ -12,10 +12,11 @@ import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   LogOut, ArrowRight, Package, ShoppingBag, MessageCircle,
-  User, Home, Lock, CheckCircle, Clock,
+  User, Home, Lock, CheckCircle, Clock, Camera,
 } from "lucide-react";
 import MentorChat from "@/components/MentorChat";
 import { Onboarding } from "@/components/Onboarding";
+import { AvatarCircle } from "@/components/ui/AvatarCircle";
 import { toast } from "sonner";
 
 type GrantedProduct = {
@@ -42,6 +43,7 @@ type Profile = {
   full_name: string;
   phone: string;
   onboarding_completed: boolean;
+  avatar_url: string | null;
 };
 
 function useCountdown(target: Date | null) {
@@ -142,10 +144,11 @@ export default function Member() {
   const { user, signOut } = useAuth();
   const [products, setProducts] = useState<GrantedProduct[]>([]);
   const [registrations, setRegistrations] = useState<Registration[]>([]);
-  const [profile, setProfile] = useState<Profile>({ full_name: "", phone: "", onboarding_completed: true });
+  const [profile, setProfile] = useState<Profile>({ full_name: "", phone: "", onboarding_completed: true, avatar_url: null });
   const [loading, setLoading] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
@@ -168,7 +171,7 @@ export default function Member() {
           .order("created_at", { ascending: false }),
         supabase
           .from("profiles")
-          .select("full_name, phone, onboarding_completed")
+          .select("full_name, phone, onboarding_completed, avatar_url")
           .eq("id", user.id)
           .single(),
       ]);
@@ -204,8 +207,9 @@ export default function Member() {
       const p = prof as any;
       const profData: Profile = {
         full_name: p?.full_name || "",
-        phone: (p as any)?.phone || "",
-        onboarding_completed: (p as any)?.onboarding_completed ?? true,
+        phone: p?.phone || "",
+        onboarding_completed: p?.onboarding_completed ?? true,
+        avatar_url: p?.avatar_url || null,
       };
       setProfile(profData);
       if (!profData.onboarding_completed) setShowOnboarding(true);
@@ -224,6 +228,24 @@ export default function Member() {
     if (error) toast.error(error.message);
     else toast.success("Profil mis à jour ✓");
     setSavingProfile(false);
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    if (!file.type.startsWith("image/")) { toast.error("Seules les images sont acceptées"); return; }
+    if (file.size > 2 * 1024 * 1024) { toast.error("Image trop lourde (max 2 Mo)"); return; }
+    setAvatarUploading(true);
+    const ext = file.name.split(".").pop();
+    const path = `${user.id}/avatar.${ext}`;
+    const { error: upErr } = await supabase.storage.from("avatars").upload(path, file, { upsert: true });
+    if (upErr) { toast.error(upErr.message); setAvatarUploading(false); return; }
+    const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path);
+    const freshUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+    await supabase.from("profiles").update({ avatar_url: freshUrl } as any).eq("id", user.id);
+    setProfile((p) => ({ ...p, avatar_url: freshUrl }));
+    toast.success("Photo de profil mise à jour ✓");
+    setAvatarUploading(false);
   };
 
   const changePassword = async () => {
@@ -263,6 +285,7 @@ export default function Member() {
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle />
+          <AvatarCircle name={profile.full_name || user?.email} avatarUrl={profile.avatar_url} size="sm" />
           <Button variant="ghost" size="sm" onClick={signOut} className="gap-1.5 text-muted-foreground hover:text-destructive">
             <LogOut className="h-4 w-4" />
             <span className="hidden sm:block">Déconnexion</span>
@@ -385,6 +408,35 @@ export default function Member() {
               {/* Infos */}
               <div className="rounded-xl border border-border bg-card p-5 space-y-4">
                 <h3 className="font-semibold text-foreground text-sm">Informations personnelles</h3>
+
+                {/* Avatar upload */}
+                <div className="flex items-center gap-4">
+                  <div className="relative shrink-0">
+                    <AvatarCircle
+                      name={profile.full_name || user?.email}
+                      avatarUrl={profile.avatar_url}
+                      size="lg"
+                    />
+                    <label className="absolute bottom-0 right-0 h-7 w-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center cursor-pointer hover:bg-primary/90 transition-colors shadow-md ring-2 ring-background">
+                      {avatarUploading
+                        ? <span className="text-[10px] font-bold animate-pulse">…</span>
+                        : <Camera className="h-3.5 w-3.5" />}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleAvatarUpload}
+                        disabled={avatarUploading}
+                      />
+                    </label>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-foreground text-sm">{profile.full_name || "Sans nom"}</p>
+                    <p className="text-xs text-muted-foreground">{user?.email}</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">JPG, PNG ou WebP · max 2 Mo</p>
+                  </div>
+                </div>
+
                 <div className="space-y-3">
                   <div className="space-y-1.5">
                     <Label>Nom complet</Label>
