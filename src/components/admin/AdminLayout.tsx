@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import { useAdminProfile } from "@/contexts/AdminProfileContext";
 import {
   LayoutDashboard, Package, Users, FolderOpen, Mail, LogOut,
   Home, FileText, Tags, Ticket, MessageCircle, GraduationCap,
@@ -122,16 +122,9 @@ function SidebarContent({
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {
   const { signOut, user } = useAuth();
+  const { adminProfile } = useAdminProfile(); // ← contexte partagé, toujours à jour
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [adminProfile, setAdminProfile] = useState<AdminProfile | null>(null);
-
-  useEffect(() => {
-    if (!user) return;
-    supabase.from("profiles").select("full_name, avatar_url").eq("id", user.id).single().then(({ data }) => {
-      if (data) setAdminProfile(data as AdminProfile);
-    });
-  }, [user]);
 
   const sharedProps = {
     location,

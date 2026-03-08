@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useAdminProfile } from "@/contexts/AdminProfileContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +26,7 @@ export default function AdminProfilePage() {
     avatar_url: null,
     created_at: null,
   });
+  const { refreshProfile } = useAdminProfile(); // pour mettre à jour sidebar + topbar
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -82,6 +84,7 @@ export default function AdminProfilePage() {
       .update({ avatar_url: freshUrl } as any)
       .eq("id", user.id);
     setProfile((p) => ({ ...p, avatar_url: freshUrl }));
+    refreshProfile(); // ← mise à jour sidebar + topbar instantanée
     toast.success("Photo de profil mise à jour ✓");
     setUploading(false);
     // reset input so same file can be re-uploaded
@@ -96,6 +99,7 @@ export default function AdminProfilePage() {
       .update({ avatar_url: null } as any)
       .eq("id", user.id);
     setProfile((p) => ({ ...p, avatar_url: null }));
+    refreshProfile(); // ← mise à jour sidebar + topbar instantanée
     toast.success("Photo supprimée");
   };
 
@@ -108,7 +112,10 @@ export default function AdminProfilePage() {
       .update({ full_name: profile.full_name } as any)
       .eq("id", user.id);
     if (error) toast.error(error.message);
-    else toast.success("Profil mis à jour ✓");
+    else {
+      refreshProfile(); // ← mise à jour sidebar + topbar instantanée
+      toast.success("Profil mis à jour ✓");
+    }
     setSaving(false);
   };
 

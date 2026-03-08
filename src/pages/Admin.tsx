@@ -1,4 +1,5 @@
 import { AdminLayout } from "@/components/admin/AdminLayout";
+import { AdminProfileProvider } from "@/contexts/AdminProfileContext";
 import { Routes, Route } from "react-router-dom";
 import AdminDashboard from "@/components/admin/AdminDashboard";
 import AdminProducts from "@/components/admin/AdminProducts";
@@ -17,6 +18,7 @@ import AdminProfilePage from "@/components/admin/AdminProfilePage";
 
 export default function Admin() {
   return (
+    <AdminProfileProvider>
     <AdminLayout>
       <Routes>
         <Route index element={<AdminDashboard />} />
@@ -35,5 +37,6 @@ export default function Admin() {
         <Route path="profile" element={<AdminProfilePage />} />
       </Routes>
     </AdminLayout>
+    </AdminProfileProvider>
   );
 }
