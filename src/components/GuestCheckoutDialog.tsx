@@ -25,6 +25,7 @@ export function GuestCheckoutDialog({ open, onOpenChange, product }: GuestChecko
   const navigate = useNavigate();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
   // Delivery fields for books
   const [deliveryAddress, setDeliveryAddress] = useState("");
@@ -112,6 +113,7 @@ export function GuestCheckoutDialog({ open, onOpenChange, product }: GuestChecko
       const insertData: any = {
         full_name: fullName.trim(),
         email: email.trim().toLowerCase(),
+        phone: phone.trim() || null,
         product_id: product.id,
         user_id: null,
         status: "pending",
@@ -204,6 +206,19 @@ export function GuestCheckoutDialog({ open, onOpenChange, product }: GuestChecko
               onChange={(e) => setEmail(e.target.value)}
               required
               placeholder="ton@email.com"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="guest-phone">
+              Téléphone <span className="text-muted-foreground font-normal">(pour te contacter en cas de souci)</span>
+            </Label>
+            <Input
+              id="guest-phone"
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="+221 77 000 00 00"
             />
           </div>
 

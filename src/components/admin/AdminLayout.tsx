@@ -1,6 +1,6 @@
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { LayoutDashboard, Package, Users, FolderOpen, Mail, LogOut, Home, FileText, Tags, Ticket, MessageCircle, GraduationCap } from "lucide-react";
+import { LayoutDashboard, Package, Users, FolderOpen, Mail, LogOut, Home, FileText, Tags, Ticket, MessageCircle, GraduationCap, Smartphone } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { cn } from "@/lib/utils";
 
@@ -9,6 +9,7 @@ const navItems = [
   { label: "Produits", path: "/admin/products", icon: Package },
   { label: "Formations", path: "/admin/formations", icon: GraduationCap },
   { label: "Inscriptions", path: "/admin/registrations", icon: Users },
+  { label: "Paiement Wave", path: "/admin/payment-settings", icon: Smartphone },
   { label: "Ressources", path: "/admin/resources", icon: FolderOpen },
   { label: "Emails", path: "/admin/emails", icon: Mail },
   { label: "Catégories", path: "/admin/categories", icon: Tags },
