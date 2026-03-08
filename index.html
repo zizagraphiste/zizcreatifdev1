@@ -2,33 +2,52 @@
 <html lang="fr" class="dark">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/favicon.svg" />
-    <title>Zizcreatif.dev — Guides, Masterclass &amp; Apps pour Créatifs</title>
-    <meta name="description" content="Ressources exclusives pour créatifs ambitieux : guides pratiques, masterclass en direct, et accès anticipé aux apps. Apprends, crée et évolue avec Zizcreatif.">
+
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#c9a227" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Zizcreatif" />
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <title>Zizcreatif.dev — Guides, Masterclass &amp; Activités pour Créatifs</title>
+    <meta name="description" content="Ressources exclusives pour créatifs ambitieux : guides pratiques, masterclass en direct, coaching, activités et accès anticipé aux apps. Apprends, crée et évolue avec Zizcreatif." />
     <meta name="author" content="Zizcreatif" />
-    <link rel="canonical" href="https://zizcreatif.dev" />
-    
-    
+    <link rel="canonical" href="https://zizcreatifdev.vercel.app" />
+
+    <!-- Open Graph -->
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://zizcreatif.dev" />
+    <meta property="og:url" content="https://zizcreatifdev.vercel.app" />
+    <meta property="og:title" content="Zizcreatif.dev — Guides, Masterclass &amp; Activités pour Créatifs" />
+    <meta property="og:description" content="Ressources exclusives pour créatifs ambitieux : guides pratiques, masterclass en direct, coaching et activités avec le mentor." />
+
+    <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
-    
-    
+    <meta name="twitter:title" content="Zizcreatif.dev — Guides, Masterclass &amp; Activités pour Créatifs" />
+    <meta name="twitter:description" content="Ressources exclusives pour créatifs ambitieux : guides pratiques, masterclass en direct, coaching et activités avec le mentor." />
+
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700;800;900&display=swap" rel="stylesheet" />
-    <meta property="og:title" content="Zizcreatif.dev — Guides, Masterclass &amp; Apps pour Créatifs">
-  <meta name="twitter:title" content="Zizcreatif.dev — Guides, Masterclass &amp; Apps pour Créatifs">
-  <meta property="og:description" content="Ressources exclusives pour créatifs ambitieux : guides pratiques, masterclass en direct, et accès anticipé aux apps. Apprends, crée et évolue avec Zizcreatif.">
-  <meta name="twitter:description" content="Ressources exclusives pour créatifs ambitieux : guides pratiques, masterclass en direct, et accès anticipé aux apps. Apprends, crée et évolue avec Zizcreatif.">
-  <meta property="og:image" content="https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/17f60c88-5184-491d-b891-0f6cccb5cff8?Expires=1772634521&amp;GoogleAccessId=go-api-on-aws%40gpt-engineer-390607.iam.gserviceaccount.com&amp;Signature=l92w5uTmHIDuQ44p%2B8yLOOe6mlbZChtXhjmrY7tPgIsXw%2F8j7NKynJPBOBuAyMavxWUNuCBWNdYMj%2FlfokxgJDjV1GmiUpcY5pMyVOvHsoSQbwloRh8NSOQanlBd5Jh%2BJEYXuRyhWKmvk%2BlCGe8QBCCD8O4quBiMidIy9VfB9PcuPzjdO4H0MMjxWfcT9%2BXe3kKya8IXw5zJ1y2TdhfT90uqEHetkR2KZGplRYVY3FgAOfyhAMJbLUbqKQWY%2BSU3CEPhLtsAn379ZIEcKlztT6ABv1hwdNlt%2FMtfwR7qA%2FcwXUejwBJRVbag6i7CUt%2BDl8OvTxi%2FdTx3TEr8n7r9yw%3D%3D">
-  <meta name="twitter:image" content="https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/17f60c88-5184-491d-b891-0f6cccb5cff8?Expires=1772634521&amp;GoogleAccessId=go-api-on-aws%40gpt-engineer-390607.iam.gserviceaccount.com&amp;Signature=l92w5uTmHIDuQ44p%2B8yLOOe6mlbZChtXhjmrY7tPgIsXw%2F8j7NKynJPBOBuAyMavxWUNuCBWNdYMj%2FlfokxgJDjV1GmiUpcY5pMyVOvHsoSQbwloRh8NSOQanlBd5Jh%2BJEYXuRyhWKmvk%2BlCGe8QBCCD8O4quBiMidIy9VfB9PcuPzjdO4H0MMjxWfcT9%2BXe3kKya8IXw5zJ1y2TdhfT90uqEHetkR2KZGplRYVY3FgAOfyhAMJbLUbqKQWY%2BSU3CEPhLtsAn379ZIEcKlztT6ABv1hwdNlt%2FMtfwR7qA%2FcwXUejwBJRVbag6i7CUt%2BDl8OvTxi%2FdTx3TEr8n7r9yw%3D%3D">
-</head>
+  </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <!-- Register Service Worker -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch(() => {});
+        });
+      }
+    </script>
   </body>
 </html>

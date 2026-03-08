@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { CheckCircle, ExternalLink, ArrowRight, Smartphone } from "lucide-react";
+import { CheckCircle, ExternalLink, ArrowRight, Smartphone, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 type RegistrationData = {
@@ -12,6 +13,7 @@ type RegistrationData = {
   full_name: string;
   email: string;
   status: string;
+  user_id: string | null;
   product_id: string;
   product_title: string;
   product_price: number;
@@ -22,6 +24,7 @@ type RegistrationData = {
 
 export default function Payment() {
   const { registrationId } = useParams<{ registrationId: string }>();
+  const { user } = useAuth();
   const [data, setData] = useState<RegistrationData | null>(null);
   const [status, setStatus] = useState<"loading" | "not_found" | "already_confirmed" | "ready" | "submitted">("loading");
   const [waveBaseUrl, setWaveBaseUrl] = useState("https://pay.wave.com/m/M_mahK9UpbVYCm/c/sn/");
@@ -31,7 +34,6 @@ export default function Payment() {
   useEffect(() => {
     if (!registrationId) return;
     (async () => {
-      // Load Wave link from site_content
       const { data: waveContent } = await supabase
         .from("site_content")
         .select("value")
@@ -39,10 +41,9 @@ export default function Payment() {
         .maybeSingle();
       if (waveContent?.value) setWaveBaseUrl(waveContent.value);
 
-      // Load registration
       const { data: reg, error } = await supabase
         .from("registrations")
-        .select("id, full_name, email, status, product_id, products(title, price, currency, cover_image_url, thumbnail_emoji)")
+        .select("id, full_name, email, status, user_id, product_id, products(title, price, currency, cover_image_url, thumbnail_emoji)")
         .eq("id", registrationId)
         .maybeSingle();
 
@@ -54,6 +55,7 @@ export default function Payment() {
         full_name: r.full_name,
         email: r.email,
         status: r.status,
+        user_id: r.user_id,
         product_id: r.product_id,
         product_title: r.products?.title || "",
         product_price: r.products?.price || 0,
@@ -75,14 +77,15 @@ export default function Payment() {
       .from("registrations")
       .update({ status: "paid" })
       .eq("id", data.id);
-    if (error) {
-      toast.error("Erreur, réessaie.");
-      setConfirming(false);
-      return;
-    }
+    if (error) { toast.error("Erreur, réessaie."); setConfirming(false); return; }
     setStatus("submitted");
     toast.success("Paiement signalé ✓");
   };
+
+  const isGuestPurchase = data && !data.user_id && !user;
+  const signupUrl = data
+    ? `/login?signup=1&email=${encodeURIComponent(data.email)}`
+    : "/login?signup=1";
 
   if (status === "loading") {
     return (
@@ -127,26 +130,55 @@ export default function Payment() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-4">
         <ThemeToggle className="fixed top-4 right-4 z-50" />
-        <div className="text-center space-y-5 max-w-md">
-          <div className="flex justify-center">
-            <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
-              <CheckCircle className="h-10 w-10 text-primary" />
+        <div className="space-y-5 max-w-md w-full">
+          <div className="text-center space-y-4">
+            <div className="flex justify-center">
+              <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
+                <CheckCircle className="h-10 w-10 text-primary" />
+              </div>
             </div>
+            <h1 className="text-2xl font-bold text-foreground">Paiement reçu ✓</h1>
+            <p className="text-muted-foreground leading-relaxed">
+              Ton paiement a bien été signalé. L'admin va vérifier et{" "}
+              <strong className="text-foreground">activer ton accès très bientôt</strong>.
+              Tu recevras un email à <span className="text-primary">{data?.email}</span>.
+            </p>
           </div>
-          <h1 className="text-2xl font-bold text-foreground">Paiement reçu ✓</h1>
-          <p className="text-muted-foreground leading-relaxed">
-            Ton paiement a bien été signalé. L'admin va vérifier et <strong className="text-foreground">activer ton accès très bientôt</strong>.
-            Tu recevras un email de confirmation à <span className="text-primary">{data?.email}</span>.
-          </p>
-          <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground text-left space-y-1">
+
+          <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground space-y-1">
             <p>📦 <strong className="text-foreground">{data?.product_title}</strong></p>
             <p>👤 {data?.full_name}</p>
           </div>
-          <Link to="/">
-            <Button variant="outline" className="gap-2">
-              Retour à l'accueil <ArrowRight className="h-4 w-4" />
-            </Button>
-          </Link>
+
+          {/* Post-purchase: invite guest to create account */}
+          {isGuestPurchase && (
+            <div className="rounded-xl border border-primary/20 bg-primary/5 p-5 space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  <UserPlus className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-foreground text-sm">Crée ton compte gratuit</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Pour retrouver tous tes achats et accéder à ton espace personnel
+                  </p>
+                </div>
+              </div>
+              <Link to={signupUrl}>
+                <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90 gap-2">
+                  Créer mon compte <ArrowRight className="h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
+          )}
+
+          <div className="text-center">
+            <Link to="/">
+              <Button variant="ghost" size="sm" className="text-muted-foreground gap-2">
+                Retour à l'accueil <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -159,56 +191,44 @@ export default function Payment() {
     <div className="min-h-screen bg-background">
       <ThemeToggle className="fixed top-4 right-4 z-50" />
 
-      <header className="border-b border-border px-6 py-4">
+      <header className="border-b border-border px-4 sm:px-6 py-4">
         <span className="text-lg font-bold text-foreground">
           Ziz<span className="text-primary">creatif</span>
         </span>
       </header>
 
-      <main className="max-w-lg mx-auto px-6 py-10 space-y-6">
-
+      <main className="max-w-lg mx-auto px-4 sm:px-6 py-8 space-y-5">
         {/* Product recap */}
         <Card className="border-primary/20">
-          <CardContent className="flex items-center gap-4 py-5">
+          <CardContent className="flex items-center gap-4 py-4">
             {data!.product_cover_image_url ? (
-              <img
-                src={data!.product_cover_image_url}
-                alt={data!.product_title}
-                className="w-16 h-16 rounded-lg object-cover"
-              />
+              <img src={data!.product_cover_image_url} alt={data!.product_title} className="w-14 h-14 rounded-lg object-cover shrink-0" />
             ) : (
-              <span className="text-4xl">{data!.product_thumbnail_emoji || "📦"}</span>
+              <span className="text-4xl shrink-0">{data!.product_thumbnail_emoji || "📦"}</span>
             )}
             <div className="flex-1 min-w-0">
-              <h2 className="text-lg font-bold text-foreground truncate">{data!.product_title}</h2>
-              <p className="text-sm text-muted-foreground">Pour : {data!.full_name}</p>
-              <p className="text-xs text-muted-foreground">{data!.email}</p>
+              <h2 className="text-base font-bold text-foreground line-clamp-2">{data!.product_title}</h2>
+              <p className="text-sm text-muted-foreground truncate">Pour : {data!.full_name}</p>
+              <p className="text-xs text-muted-foreground truncate">{data!.email}</p>
             </div>
-            <span className="text-2xl font-black text-primary whitespace-nowrap">
+            <span className="text-xl font-black text-primary whitespace-nowrap shrink-0">
               {data!.product_price.toLocaleString("fr-FR")} {data!.product_currency}
             </span>
           </CardContent>
         </Card>
 
-        {/* How to pay */}
+        {/* Step 1: Wave */}
         <div className="rounded-xl border border-border bg-card p-5 space-y-4">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-sm font-bold">1</div>
+            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-sm font-bold shrink-0">1</div>
             <h3 className="text-base font-bold text-foreground">Paye via Wave</h3>
           </div>
-
           <p className="text-sm text-muted-foreground pl-11">
-            Le montant est pré-rempli automatiquement. Ouvre l'application Wave et confirme le paiement.
+            Le montant est pré-rempli automatiquement. Ouvre Wave et confirme.
           </p>
-
           <div className="pl-11">
-            <a
-              href={waveUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => setWaveLaunched(true)}
-            >
-              <Button className="w-full h-12 bg-[#1DC8FF] hover:bg-[#1DC8FF]/90 text-black font-bold text-base gap-2">
+            <a href={waveUrl} target="_blank" rel="noopener noreferrer" onClick={() => setWaveLaunched(true)}>
+              <Button className="w-full h-12 bg-[#1DC8FF] hover:bg-[#1DC8FF]/90 text-black font-bold gap-2">
                 <Smartphone className="h-5 w-5" />
                 Payer {data!.product_price.toLocaleString("fr-FR")} {data!.product_currency} sur Wave
                 <ExternalLink className="h-4 w-4" />
@@ -217,22 +237,20 @@ export default function Payment() {
           </div>
         </div>
 
-        {/* Confirm payment */}
+        {/* Step 2: Confirm */}
         <div className={`rounded-xl border bg-card p-5 space-y-4 transition-all ${waveLaunched ? "border-primary/40" : "border-border opacity-60"}`}>
           <div className="flex items-center gap-3">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${waveLaunched ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>2</div>
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${waveLaunched ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>2</div>
             <h3 className="text-base font-bold text-foreground">Confirme ton paiement</h3>
           </div>
-
           <p className="text-sm text-muted-foreground pl-11">
             Une fois le paiement Wave effectué, clique ici pour informer l'admin.
           </p>
-
           <div className="pl-11">
             <Button
               onClick={handleConfirmPayment}
               disabled={confirming}
-              className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-bold text-base gap-2"
+              className="w-full h-12 bg-primary text-primary-foreground hover:bg-primary/90 font-bold gap-2"
             >
               {confirming ? "Envoi en cours…" : <>J'ai effectué mon paiement <ArrowRight className="h-4 w-4" /></>}
             </Button>
@@ -240,7 +258,7 @@ export default function Payment() {
         </div>
 
         <p className="text-xs text-center text-muted-foreground">
-          Un problème ? Contacte-nous à <span className="text-primary">support@zizcreatif.dev</span>
+          Un problème ? <span className="text-primary">support@zizcreatif.dev</span>
         </p>
       </main>
     </div>

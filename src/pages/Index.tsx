@@ -7,7 +7,9 @@ import { useSiteContent } from "@/hooks/useSiteContent";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowRight, Sparkles, BookOpen, Users, Zap, MapPin, Video, Calendar, Clock, UserCheck } from "lucide-react";
+import { ArrowRight, Sparkles, BookOpen, Users, Zap, MapPin, Video, Calendar, Clock, UserCheck, CalendarHeart } from "lucide-react";
+
+const ACTIVITY_TYPES = ["masterclass", "coaching", "diner", "weekend"];
 
 
 type Category = { id: string; name: string; sort_order: number };
@@ -363,10 +365,11 @@ function ProductsSection({ get }: { get: (key: string, fb: string) => string }) 
           .select("id, title, description, thumbnail_emoji, cover_image_url, type, price, currency, max_spots, spots_taken, delivery_mode, status, category_id")
           .in("status", ["active", "closed"])
           .neq("type", "formation")
+          .not("type", "in", `(${ACTIVITY_TYPES.map(t => `"${t}"`).join(",")})`)
           .order("created_at", { ascending: false }),
         supabase.from("categories").select("*").order("sort_order"),
       ]);
-      setProducts((prodRes.data || []).filter(p => p.type !== "formation"));
+      setProducts((prodRes.data || []).filter(p => p.type !== "formation" && !ACTIVITY_TYPES.includes(p.type || "")));
       setCategories((catRes.data as Category[]) || []);
       setLoading(false);
     })();
@@ -576,6 +579,130 @@ function FormationsSection() {
   );
 }
 
+// ── Activity type display config ──
+const ACTIVITY_INFO: Record<string, { label: string; emoji: string; color: string }> = {
+  masterclass: { label: "Masterclass", emoji: "🎤", color: "text-purple-500 bg-purple-500/10" },
+  coaching:    { label: "Coaching one-to-one", emoji: "🎯", color: "text-blue-500 bg-blue-500/10" },
+  diner:       { label: "Dîner avec le mentor", emoji: "🍽️", color: "text-amber-500 bg-amber-500/10" },
+  weekend:     { label: "Week-end Détox", emoji: "🌿", color: "text-green-500 bg-green-500/10" },
+};
+
+function ActivityCard({ product, index }: { product: Product; index: number }) {
+  const navigate = useNavigate();
+  const info = ACTIVITY_INFO[product.type || ""] || { label: product.type, emoji: "📅", color: "text-primary bg-primary/10" };
+  const unlimited = product.max_spots === 0;
+  const spotsLeft = unlimited ? Infinity : product.max_spots - (product.spots_taken || 0);
+  const isClosed = product.status === "closed" || (!unlimited && spotsLeft <= 0);
+  const spotsPercent = unlimited ? 0 : Math.min(100, ((product.spots_taken || 0) / product.max_spots) * 100);
+  const isOnline = product.attendance_mode !== "in-person";
+  const formatDate = (d: string | null) => !d ? null : new Date(d).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+
+  return (
+    <motion.div
+      variants={fadeUp} custom={index} initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-50px" }}
+      className={`group relative flex flex-col rounded-2xl border bg-card overflow-hidden transition-all cursor-pointer ${isClosed ? "border-border opacity-80" : "border-border hover:border-primary/40 hover:shadow-xl hover:shadow-primary/5"}`}
+      onClick={() => navigate(`/product/${product.id}`)}
+    >
+      <div className="relative h-44 bg-muted overflow-hidden">
+        {product.cover_image_url ? (
+          <img src={product.cover_image_url} alt={product.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-6xl bg-gradient-to-br from-primary/10 to-primary/5">{product.thumbnail_emoji || info.emoji}</div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+        <div className="absolute top-3 left-3">
+          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold backdrop-blur-sm ${info.color}`}>{info.emoji} {info.label}</span>
+        </div>
+        {isClosed && <div className="absolute top-3 right-3"><Badge className="bg-destructive text-destructive-foreground text-xs">Complet</Badge></div>}
+        <div className="absolute bottom-3 left-3">
+          <Badge variant="secondary" className="gap-1 text-xs backdrop-blur-sm bg-background/80">
+            {isOnline ? <><Video className="h-3 w-3" /> En ligne</> : <><MapPin className="h-3 w-3" /> Présentiel</>}
+          </Badge>
+        </div>
+      </div>
+      <div className="p-5 flex flex-col flex-1 gap-3">
+        <div>
+          <h3 className="text-lg font-bold text-foreground mb-1">{product.title}</h3>
+          {product.description && <p className="text-sm text-muted-foreground line-clamp-2">{product.description}</p>}
+        </div>
+        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+          {product.delivery_date && <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5 text-primary" />{formatDate(product.delivery_date)}</span>}
+          {product.event_time && <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5 text-primary" />{product.event_time}</span>}
+          {!isOnline && product.venue && <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5 text-primary" />{product.venue}</span>}
+        </div>
+        {!unlimited && (
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="flex items-center gap-1 text-muted-foreground"><UserCheck className="h-3.5 w-3.5" />{isClosed ? "Complet" : `${spotsLeft} place${spotsLeft > 1 ? "s" : ""} restante${spotsLeft > 1 ? "s" : ""}`}</span>
+              <span className="text-muted-foreground">{product.spots_taken || 0}/{product.max_spots}</span>
+            </div>
+            <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+              <div className={`h-full rounded-full transition-all ${spotsPercent >= 80 ? "bg-destructive" : spotsPercent >= 50 ? "bg-orange-500" : "bg-primary"}`} style={{ width: `${spotsPercent}%` }} />
+            </div>
+          </div>
+        )}
+        <div className="mt-auto pt-3 border-t border-border flex items-center justify-between">
+          <span className="text-2xl font-black text-primary">{product.price === 0 ? "Gratuit" : `${product.price.toLocaleString("fr-FR")} ${product.currency || "FCFA"}`}</span>
+          <Button size="sm" className={isClosed ? "bg-muted text-muted-foreground" : "bg-primary text-primary-foreground hover:bg-primary/90 font-semibold gap-1"}
+            onClick={(e) => { e.stopPropagation(); navigate(`/product/${product.id}`); }}>
+            {isClosed ? "Complet" : <> S'inscrire <ArrowRight className="h-4 w-4" /></>}
+          </Button>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function ActivitesSection() {
+  const [activities, setActivities] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from("products")
+        .select("id, title, description, thumbnail_emoji, cover_image_url, type, price, currency, max_spots, spots_taken, delivery_mode, delivery_date, event_time, attendance_mode, venue, date_mode, status, category_id")
+        .in("type", ACTIVITY_TYPES)
+        .eq("status", "active")
+        .order("delivery_date", { ascending: true, nullsFirst: false });
+      setActivities(data || []);
+      setLoading(false);
+    })();
+  }, []);
+
+  if (!loading && activities.length === 0) return null;
+
+  return (
+    <section className="py-20 px-4 sm:px-6" id="activites">
+      <div className="max-w-5xl mx-auto space-y-10">
+        <div className="text-center space-y-3">
+          <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="inline-flex items-center gap-2 text-primary text-sm font-semibold">
+            <CalendarHeart className="h-4 w-4" /> Activités &amp; Expériences
+          </motion.div>
+          <motion.h2 initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.1 }} className="text-3xl sm:text-4xl font-black text-foreground">
+            Vis l'expérience en direct
+          </motion.h2>
+          <motion.p initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.2 }} className="text-muted-foreground max-w-lg mx-auto">
+            Coaching individuel, masterclass live, dîners exclusifs, week-ends de transformation — des expériences uniques avec le mentor.
+          </motion.p>
+        </div>
+        <div className="flex flex-wrap justify-center gap-2">
+          {Object.values(ACTIVITY_INFO).map((info) => (
+            <span key={info.label} className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${info.color}`}>{info.emoji} {info.label}</span>
+          ))}
+        </div>
+        {loading ? (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">{[1, 2].map((i) => <div key={i} className="h-72 rounded-2xl bg-muted animate-pulse" />)}</div>
+        ) : (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {activities.map((p, i) => <ActivityCard key={p.id} product={p} index={i} />)}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function CTASection({ get }: { get: (key: string, fb: string) => string }) {
   return (
     <section className="py-20 px-6">
@@ -618,41 +745,105 @@ function Footer({ get }: { get: (key: string, fb: string) => string }) {
 
 export default function Index() {
   const { session, userRole } = useAuth();
-  const { get, loading: contentLoading } = useSiteContent();
+  const { get } = useSiteContent();
   const dashboardPath = userRole === "admin" ? "/admin" : "/member";
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const navLinks = [
+    { label: "Catalogue", href: "#produits" },
+    { label: "Formations", href: "#formations" },
+    { label: "Activités", href: "#activites" },
+  ];
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Nav */}
+      {/* ── Navbar ── */}
       <header className="fixed top-0 inset-x-0 z-50 backdrop-blur-md bg-background/80 border-b border-border">
-        <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
-          <span className="text-lg font-bold text-foreground">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
+          {/* Brand */}
+          <Link to="/" className="text-lg font-bold text-foreground shrink-0">
             Ziz<span className="text-primary">creatif</span>
-          </span>
-          <div className="flex items-center gap-3">
+          </Link>
+
+          {/* Desktop nav links */}
+          <nav className="hidden sm:flex items-center gap-1">
+            {navLinks.map((l) => (
+              <a
+                key={l.label}
+                href={l.href}
+                className="px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground rounded-md hover:bg-accent transition-colors"
+              >
+                {l.label}
+              </a>
+            ))}
+          </nav>
+
+          {/* Right: theme + auth + hamburger */}
+          <div className="flex items-center gap-2">
             <ThemeToggle />
             {session ? (
               <Link to={dashboardPath}>
-                <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90 font-semibold">
+                <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90 font-semibold hidden sm:flex">
                   Mon espace
                 </Button>
               </Link>
             ) : (
               <Link to="/login">
-                <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90 font-semibold">
+                <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90 font-semibold hidden sm:flex">
                   Connexion
                 </Button>
               </Link>
             )}
+            {/* Hamburger (mobile) */}
+            <button
+              className="sm:hidden p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label="Menu"
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {mobileMenuOpen
+                  ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                }
+              </svg>
+            </button>
           </div>
         </div>
+
+        {/* Mobile dropdown menu */}
+        {mobileMenuOpen && (
+          <div className="sm:hidden border-t border-border bg-background/95 backdrop-blur-md px-4 py-3 space-y-1">
+            {navLinks.map((l) => (
+              <a
+                key={l.label}
+                href={l.href}
+                onClick={() => setMobileMenuOpen(false)}
+                className="block px-3 py-2.5 text-sm font-medium text-foreground hover:bg-accent rounded-lg transition-colors"
+              >
+                {l.label}
+              </a>
+            ))}
+            <div className="pt-2 border-t border-border mt-2">
+              {session ? (
+                <Link to={dashboardPath} onClick={() => setMobileMenuOpen(false)}>
+                  <Button className="w-full bg-primary text-primary-foreground font-semibold">Mon espace</Button>
+                </Link>
+              ) : (
+                <Link to="/login" onClick={() => setMobileMenuOpen(false)}>
+                  <Button className="w-full bg-primary text-primary-foreground font-semibold">Connexion</Button>
+                </Link>
+              )}
+            </div>
+          </div>
+        )}
       </header>
 
       <main className="pt-14">
         <HeroSection get={get} />
         <ValueProps get={get} />
         <ProductsSection get={get} />
-        <FormationsSection />
+        <section id="formations"><FormationsSection /></section>
+        <ActivitesSection />
         <CTASection get={get} />
       </main>
 

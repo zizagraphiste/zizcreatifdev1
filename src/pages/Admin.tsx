@@ -12,6 +12,7 @@ import AdminMentorMessages from "@/components/admin/AdminMentorMessages";
 import AdminFormations from "@/components/admin/AdminFormations";
 import AdminPaymentSettings from "@/components/admin/AdminPaymentSettings";
 import AdminComptabilite from "@/components/admin/AdminComptabilite";
+import AdminActivites from "@/components/admin/AdminActivites";
 
 export default function Admin() {
   return (
@@ -20,6 +21,7 @@ export default function Admin() {
         <Route index element={<AdminDashboard />} />
         <Route path="products" element={<AdminProducts />} />
         <Route path="formations" element={<AdminFormations />} />
+        <Route path="activites" element={<AdminActivites />} />
         <Route path="registrations" element={<AdminRegistrations />} />
         <Route path="comptabilite" element={<AdminComptabilite />} />
         <Route path="resources" element={<AdminResources />} />
