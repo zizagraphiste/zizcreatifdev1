@@ -136,11 +136,9 @@ export function GuestCheckoutDialog({ open, onOpenChange, product }: GuestChecko
 
       if (error) throw error;
 
-      // Increment promo code usage
+      // Increment promo code usage (atomic via SQL expression)
       if (promoApplied) {
-        await supabase.rpc("has_role" as any, {} as any).then(() => {}); // noop, just to keep types
-        // Use raw update
-        await supabase.from("promo_codes").update({ times_used: (await supabase.from("promo_codes").select("times_used").eq("id", promoApplied.id).single()).data?.times_used as number + 1 } as any).eq("id", promoApplied.id);
+        await supabase.rpc("increment_promo_usage" as any, { promo_id: promoApplied.id } as any);
       }
 
       toast.success("Inscription enregistrée ✓");

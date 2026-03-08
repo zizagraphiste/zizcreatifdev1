@@ -99,7 +99,7 @@ export default function ProductPage() {
       setModules((res as Module[]) || []);
       setLoading(false);
     })();
-  }, [productId]);
+  }, [identifier]);
 
   const handleOpenFreeResource = async (m: Module) => {
     if (m.type === "link" && m.external_url) {

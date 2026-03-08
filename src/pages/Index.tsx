@@ -510,7 +510,6 @@ function ProductsSection({ get }: { get: (key: string, fb: string) => string }) 
 function FormationsSection() {
   const [formations, setFormations] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
 
   useEffect(() => {
     (async () => {

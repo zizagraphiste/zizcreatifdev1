@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "zizcreatifdev",
-      "runtimeExecutable": "/usr/local/bin/npx",
-      "runtimeArgs": ["vite"],
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": ["-c", "cd /Users/mentor/Documents/zizcreatifdev-main && bun run dev"],
       "port": 5173
     }
   ]
