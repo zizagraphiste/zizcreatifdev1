@@ -36,6 +36,8 @@ export function GuestCheckoutDialog({ open, onOpenChange, product }: GuestChecko
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [deliveryCity, setDeliveryCity] = useState("");
   const [deliveryLocation, setDeliveryLocation] = useState("");
+  // Coaching notes
+  const [coachingNotes, setCoachingNotes] = useState("");
   // Promo code
   const [promoCode, setPromoCode] = useState("");
   const [promoApplied, setPromoApplied] = useState<{ id: string; discount_type: string; discount_value: number } | null>(null);
@@ -43,6 +45,7 @@ export function GuestCheckoutDialog({ open, onOpenChange, product }: GuestChecko
 
   const isFree = product.price === 0;
   const needsDelivery = product.type === "book";
+  const isCoaching = product.type === "coaching";
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   // Auto-fill from profile when logged in
@@ -88,6 +91,7 @@ export function GuestCheckoutDialog({ open, onOpenChange, product }: GuestChecko
       setDeliveryAddress("");
       setDeliveryCity("");
       setDeliveryLocation("");
+      setCoachingNotes("");
     }
   }, [open, isLoggedIn]);
 
@@ -141,6 +145,10 @@ export function GuestCheckoutDialog({ open, onOpenChange, product }: GuestChecko
         insertData.delivery_address = deliveryAddress.trim();
         insertData.delivery_city = deliveryCity.trim() || null;
         insertData.delivery_location = deliveryLocation.trim() || null;
+      }
+
+      if (isCoaching && coachingNotes.trim()) {
+        insertData.notes = coachingNotes.trim();
       }
 
       if (promoApplied) {
@@ -255,6 +263,25 @@ export function GuestCheckoutDialog({ open, onOpenChange, product }: GuestChecko
                 <Label htmlFor="delivery-location" className="text-sm">Point de repère</Label>
                 <Input id="delivery-location" value={deliveryLocation} onChange={(e) => setDeliveryLocation(e.target.value)} placeholder="Ex: Près de la pharmacie X" />
               </div>
+            </div>
+          )}
+
+          {/* Coaching notes */}
+          {isCoaching && (
+            <div className="space-y-2 rounded-xl border border-primary/20 bg-primary/5 p-4">
+              <Label htmlFor="coaching-notes" className="font-semibold text-foreground flex items-center gap-2">
+                🎯 Points à aborder durant la séance
+              </Label>
+              <Textarea
+                id="coaching-notes"
+                value={coachingNotes}
+                onChange={(e) => setCoachingNotes(e.target.value)}
+                placeholder={"Ex :\n— Stratégie de prix pour mon offre\n— Comment prospecter sur LinkedIn\n— Développer ma présence en ligne"}
+                rows={5}
+              />
+              <p className="text-xs text-muted-foreground">
+                Ces informations aident à préparer ta séance pour qu'elle soit la plus efficace possible.
+              </p>
             </div>
           )}
 

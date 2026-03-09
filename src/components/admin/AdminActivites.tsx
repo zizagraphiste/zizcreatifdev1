@@ -390,6 +390,7 @@ const EMPTY_FORM = {
   online_link: "",
   max_spots: 0,
   thumbnail_emoji: "",
+  cover_image_url: null as string | null,
   status: "active",
   extra_config: {} as Record<string, any>,
 };
@@ -413,6 +414,7 @@ export default function AdminActivites() {
   const [editing, setEditing] = useState<Activity | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [showPast, setShowPast] = useState(false);
 
   /* ── Types ── */
@@ -466,6 +468,7 @@ export default function AdminActivites() {
       online_link: (a.extra_config as any)?.online_link || "",
       max_spots: a.max_spots,
       thumbnail_emoji: a.thumbnail_emoji || "",
+      cover_image_url: a.cover_image_url || null,
       status: a.status || "active",
       extra_config: (a.extra_config as Record<string, any>) || {},
     });
@@ -495,6 +498,7 @@ export default function AdminActivites() {
       venue: form.attendance_mode !== "online" ? (form.venue.trim() || null) : null,
       max_spots: Number(form.max_spots) || 0,
       thumbnail_emoji: form.thumbnail_emoji || null,
+      cover_image_url: form.cover_image_url || null,
       status: form.status,
       delivery_mode: "scheduled",
       extra_config: Object.keys(form.extra_config).length > 0 ? form.extra_config : null,
@@ -524,6 +528,20 @@ export default function AdminActivites() {
     await supabase.from("products").update({ status: "draft" }).eq("id", id);
     toast.success("Activité archivée (brouillon)");
     fetchActivities();
+  };
+
+  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    const ext = file.name.split(".").pop();
+    const path = `${crypto.randomUUID()}.${ext}`;
+    const { error } = await supabase.storage.from("product-covers").upload(path, file, { upsert: true });
+    if (error) { toast.error(error.message); setUploading(false); return; }
+    const { data: urlData } = supabase.storage.from("product-covers").getPublicUrl(path);
+    setField("cover_image_url", urlData.publicUrl);
+    setUploading(false);
+    toast.success("Image uploadée ✓");
   };
 
   const toggleStatus = async (a: Activity) => {
@@ -887,6 +905,48 @@ export default function AdminActivites() {
             <div className="space-y-1.5">
               <Label>Description</Label>
               <Textarea value={form.description} onChange={(e) => setField("description", e.target.value)} rows={3} />
+            </div>
+
+            {/* Image de couverture */}
+            <div className="space-y-1.5">
+              <Label>Image de couverture</Label>
+              {form.cover_image_url ? (
+                <div className="relative rounded-xl overflow-hidden aspect-video border border-border group">
+                  <img src={form.cover_image_url} alt="couverture" className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                    <label className="cursor-pointer rounded-lg bg-white/20 hover:bg-white/30 px-3 py-1.5 text-white text-xs font-medium transition-colors">
+                      Changer
+                      <input type="file" accept="image/*" className="sr-only" onChange={handleCoverUpload} />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setField("cover_image_url", null)}
+                      className="rounded-lg bg-destructive/70 hover:bg-destructive px-3 py-1.5 text-white text-xs font-medium transition-colors"
+                    >
+                      Supprimer
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <label className={cn(
+                  "flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border p-8 cursor-pointer transition-all hover:border-primary/50 hover:bg-primary/5",
+                  uploading && "opacity-50 pointer-events-none"
+                )}>
+                  {uploading ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="h-5 w-5 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                      <span className="text-xs text-muted-foreground">Upload en cours…</span>
+                    </div>
+                  ) : (
+                    <>
+                      <Camera className="h-8 w-8 text-muted-foreground/50" />
+                      <span className="text-sm text-muted-foreground">Cliquer pour ajouter une image</span>
+                      <span className="text-xs text-muted-foreground/60">JPG, PNG, WebP</span>
+                    </>
+                  )}
+                  <input type="file" accept="image/*" className="sr-only" onChange={handleCoverUpload} disabled={uploading} />
+                </label>
+              )}
             </div>
 
             {/* ── Coaching section ── */}

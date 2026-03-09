@@ -12,6 +12,7 @@ type Registration = {
   full_name: string;
   email: string;
   phone: string | null;
+  notes: string | null;
   status: string;
   created_at: string;
   confirmed_at: string | null;
@@ -209,6 +210,12 @@ export default function AdminRegistrations() {
                     <div className="flex items-center gap-1 text-xs text-primary mt-0.5">
                       <Phone className="h-3 w-3" />
                       <a href={`tel:${r.phone}`} className="hover:underline">{r.phone}</a>
+                    </div>
+                  )}
+                  {r.notes && (
+                    <div className="mt-1.5 rounded-md border border-primary/20 bg-primary/5 px-2 py-1.5 text-xs text-foreground whitespace-pre-wrap max-w-xs">
+                      <span className="font-semibold text-primary">🎯 Points coaching :</span>
+                      <br />{r.notes}
                     </div>
                   )}
                 </td>
