@@ -25,7 +25,8 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 /* ═══════════════ COACHING CONSTANTS ═══════════════ */
-export { DURATION_PRESETS, DRESS_CODES } from "@/constants/activities";
+import { DURATION_PRESETS, DRESS_CODES } from "@/constants/activities";
+export { DURATION_PRESETS, DRESS_CODES };
 const FR_DAYS_SHORT = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const FR_MONTHS = [
   "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
