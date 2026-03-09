@@ -36,7 +36,6 @@ type Product = {
   end_date: string | null;
   date_mode: string | null;
   delivery_mode: string | null;
-  online_link: string | null;
   extra_config: Record<string, any> | null;
 };
 
