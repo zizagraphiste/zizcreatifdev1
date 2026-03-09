@@ -702,7 +702,7 @@ export default function AdminActivites() {
             </div>
           )}
           {/* Diner extras */}
-          {a.type === "diner" && a.extra_config && (a.extra_config as any).dress_code && (
+          {a.type === "diner" && a.extra_config && (a.extra_config as any).dress_code && (a.extra_config as any).dress_code !== "none" && (
             <Badge variant="outline" className="text-xs gap-1">
               <Shirt className="h-2.5 w-2.5" />
               {DRESS_CODES.find(d => d.value === (a.extra_config as any).dress_code)?.label || (a.extra_config as any).dress_code}
@@ -1069,7 +1069,7 @@ export default function AdminActivites() {
                     </div>
                     <div className="space-y-1.5">
                       <Label>Dress code</Label>
-                      <Select value={form.extra_config.dress_code || ""} onValueChange={(v) => setExtra("dress_code", v)}>
+                      <Select value={form.extra_config.dress_code || "none"} onValueChange={(v) => setExtra("dress_code", v)}>
                         <SelectTrigger><SelectValue placeholder="Aucun dress code" /></SelectTrigger>
                         <SelectContent>
                           {DRESS_CODES.map((d) => (

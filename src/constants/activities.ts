@@ -8,8 +8,9 @@ export const DURATION_PRESETS = [
   { minutes: 120, label: "2 h" },
 ];
 
+// Note: Radix UI Select interdit value="" → on utilise "none" comme sentinelle
 export const DRESS_CODES = [
-  { value: "",             label: "Aucun dress code" },
+  { value: "none",         label: "Aucun dress code" },
   { value: "casual",       label: "Décontracté" },
   { value: "smart_casual", label: "Smart casual" },
   { value: "formelle",     label: "Tenue formelle" },

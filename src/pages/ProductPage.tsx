@@ -366,7 +366,7 @@ export default function ProductPage() {
               {product.event_time && (
                 <div className="flex items-center gap-2"><Clock className="h-4 w-4 text-amber-500 shrink-0" /><span>{product.event_time}</span></div>
               )}
-              {product.extra_config?.dress_code && (
+              {product.extra_config?.dress_code && product.extra_config.dress_code !== "none" && (
                 <div className="flex items-center gap-2">
                   <Shirt className="h-4 w-4 text-amber-500 shrink-0" />
                   <span>{DRESS_CODES.find(d => d.value === product.extra_config?.dress_code)?.label || product.extra_config.dress_code}</span>
