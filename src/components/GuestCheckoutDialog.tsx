@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ArrowRight, Loader2, CheckCircle, Tag, UserCircle } from "lucide-react";
 import { toast } from "sonner";
+import type { CoachingPreselected } from "@/components/CoachingBookingWidget";
 
 type GuestCheckoutProps = {
   open: boolean;
@@ -20,9 +21,11 @@ type GuestCheckoutProps = {
     currency: string | null;
     type?: string | null;
   };
+  /** Set when coaching booking was pre-selected on the product page */
+  preselected?: CoachingPreselected;
 };
 
-export function GuestCheckoutDialog({ open, onOpenChange, product }: GuestCheckoutProps) {
+export function GuestCheckoutDialog({ open, onOpenChange, product, preselected }: GuestCheckoutProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const isLoggedIn = !!user;
@@ -32,85 +35,75 @@ export function GuestCheckoutDialog({ open, onOpenChange, product }: GuestChecko
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
-  // Delivery fields for books
+
+  // Delivery fields (books)
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [deliveryCity, setDeliveryCity] = useState("");
   const [deliveryLocation, setDeliveryLocation] = useState("");
-  // Coaching notes
+
+  // Coaching notes (free text)
   const [coachingNotes, setCoachingNotes] = useState("");
+
   // Promo code
   const [promoCode, setPromoCode] = useState("");
-  const [promoApplied, setPromoApplied] = useState<{ id: string; discount_type: string; discount_value: number } | null>(null);
+  const [promoApplied, setPromoApplied] = useState<{
+    id: string; discount_type: string; discount_value: number;
+  } | null>(null);
   const [checkingPromo, setCheckingPromo] = useState(false);
 
-  const isFree = product.price === 0;
-  const needsDelivery = product.type === "book";
   const isCoaching = product.type === "coaching";
+  const needsDelivery = product.type === "book";
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-  // Auto-fill from profile when logged in
+  // Base price: for coaching use preselected price, otherwise product.price
+  const basePrice = isCoaching && preselected ? preselected.price : product.price;
+  const isFree = basePrice === 0;
+
+  const finalPrice = promoApplied
+    ? promoApplied.discount_type === "percentage"
+      ? Math.max(0, Math.round(basePrice * (1 - promoApplied.discount_value / 100)))
+      : Math.max(0, basePrice - promoApplied.discount_value)
+    : basePrice;
+  const discountAmount = basePrice - finalPrice;
+
+  /* ─── Auto-fill profile when logged in ─── */
   useEffect(() => {
     if (!open || !user) return;
     setProfileLoading(true);
     (async () => {
       setEmail(user.email || "");
       const { data: profile } = await supabase
-        .from("profiles")
-        .select("full_name, phone")
-        .eq("id", user.id)
-        .single();
+        .from("profiles").select("full_name, phone").eq("id", user.id).single();
       if (profile?.full_name) setFullName(profile.full_name);
       if ((profile as any)?.phone) setPhone((profile as any).phone);
-
-      // Fallback: phone from last registration
       if (!(profile as any)?.phone) {
         const { data: lastReg } = await supabase
-          .from("registrations")
-          .select("phone")
-          .eq("user_id", user.id)
-          .not("phone", "is", null)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+          .from("registrations").select("phone").eq("user_id", user.id)
+          .not("phone", "is", null).order("created_at", { ascending: false })
+          .limit(1).maybeSingle();
         if (lastReg?.phone) setPhone(lastReg.phone);
       }
       setProfileLoading(false);
     })();
   }, [open, user]);
 
-  // Reset on close
+  /* ─── Reset on close ─── */
   useEffect(() => {
     if (!open) {
-      setPromoCode("");
-      setPromoApplied(null);
-      if (!isLoggedIn) {
-        setFullName("");
-        setEmail("");
-        setPhone("");
-      }
-      setDeliveryAddress("");
-      setDeliveryCity("");
-      setDeliveryLocation("");
-      setCoachingNotes("");
+      setPromoCode(""); setPromoApplied(null); setCoachingNotes("");
+      if (!isLoggedIn) { setFullName(""); setEmail(""); setPhone(""); }
+      setDeliveryAddress(""); setDeliveryCity(""); setDeliveryLocation("");
     }
   }, [open, isLoggedIn]);
 
-  const finalPrice = promoApplied
-    ? promoApplied.discount_type === "percentage"
-      ? Math.max(0, Math.round(product.price * (1 - promoApplied.discount_value / 100)))
-      : Math.max(0, product.price - promoApplied.discount_value)
-    : product.price;
-  const discountAmount = product.price - finalPrice;
-
+  /* ─── Promo ─── */
   const handleApplyPromo = async () => {
     if (!promoCode.trim()) return;
     setCheckingPromo(true);
     const { data, error } = await supabase
       .from("promo_codes")
       .select("id, discount_type, discount_value, applies_to_type, max_uses, times_used, expires_at, active")
-      .eq("code", promoCode.trim().toUpperCase())
-      .eq("active", true)
-      .maybeSingle();
+      .eq("code", promoCode.trim().toUpperCase()).eq("active", true).maybeSingle();
 
     if (error || !data) { toast.error("Code promo invalide"); setPromoApplied(null); setCheckingPromo(false); return; }
     if (data.applies_to_type && data.applies_to_type !== product.type) { toast.error("Ce code ne s'applique pas à ce type de produit"); setPromoApplied(null); setCheckingPromo(false); return; }
@@ -122,6 +115,7 @@ export function GuestCheckoutDialog({ open, onOpenChange, product }: GuestChecko
     setCheckingPromo(false);
   };
 
+  /* ─── Submit ─── */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const nameToUse = fullName.trim();
@@ -129,8 +123,8 @@ export function GuestCheckoutDialog({ open, onOpenChange, product }: GuestChecko
     if (nameToUse.length < 2) { toast.error("Le nom doit contenir au moins 2 caractères"); return; }
     if (!emailRegex.test(emailToUse)) { toast.error("Email invalide"); return; }
     if (needsDelivery && !deliveryAddress.trim()) { toast.error("L'adresse de livraison est requise pour un livre"); return; }
-    setLoading(true);
 
+    setLoading(true);
     try {
       const insertData: any = {
         full_name: nameToUse,
@@ -147,8 +141,18 @@ export function GuestCheckoutDialog({ open, onOpenChange, product }: GuestChecko
         insertData.delivery_location = deliveryLocation.trim() || null;
       }
 
-      if (isCoaching && coachingNotes.trim()) {
-        insertData.notes = coachingNotes.trim();
+      // Coaching: store preselected booking + notes
+      if (isCoaching && preselected) {
+        const dateLabel = preselected.date.toLocaleDateString("fr-FR", {
+          weekday: "long", day: "numeric", month: "long", year: "numeric",
+        });
+        const parts = [
+          `⏱ Durée : ${preselected.durationLabel}`,
+          `📅 Date : ${dateLabel}`,
+          preselected.time ? `🕐 Heure : ${preselected.time.replace(":", "h")}` : null,
+          coachingNotes.trim() ? `🎯 Points à aborder :\n${coachingNotes.trim()}` : null,
+        ].filter(Boolean);
+        if (parts.length > 0) insertData.notes = parts.join("\n");
       }
 
       if (promoApplied) {
@@ -157,11 +161,7 @@ export function GuestCheckoutDialog({ open, onOpenChange, product }: GuestChecko
       }
 
       const { data, error } = await supabase
-        .from("registrations")
-        .insert(insertData)
-        .select("id")
-        .single();
-
+        .from("registrations").insert(insertData).select("id").single();
       if (error) throw error;
 
       if (promoApplied) {
@@ -188,26 +188,56 @@ export function GuestCheckoutDialog({ open, onOpenChange, product }: GuestChecko
       <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold">
-            {isLoggedIn ? "Finaliser mon achat" : `S'inscrire à ${product.title}`}
+            {isCoaching ? "Finaliser la réservation" : isLoggedIn ? "Finaliser mon achat" : `S'inscrire à ${product.title}`}
           </DialogTitle>
         </DialogHeader>
 
-        {/* Price */}
-        <div className="text-center py-2">
-          <span className="text-2xl font-black text-primary">
-            {isFree ? "Gratuit" : `${product.price.toLocaleString("fr-FR")} ${product.currency || "FCFA"}`}
-          </span>
-          {promoApplied && finalPrice < product.price && (
-            <div className="flex items-center justify-center gap-2 mt-1">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <span className="text-sm text-green-500 font-medium">
-                -{discountAmount.toLocaleString("fr-FR")} FCFA → {finalPrice === 0 ? "Gratuit" : `${finalPrice.toLocaleString("fr-FR")} FCFA`}
-              </span>
+        {/* ── Coaching: booking summary (read-only) ── */}
+        {isCoaching && preselected && (
+          <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-2">
+            <p className="text-xs font-semibold text-primary uppercase tracking-wide">Votre séance</p>
+            <div className="flex items-end justify-between gap-2">
+              <div className="space-y-1 text-sm text-foreground">
+                <p>⏱ <span className="font-semibold">{preselected.durationLabel}</span></p>
+                <p>📅 {preselected.date.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
+                {preselected.time && <p>🕐 {preselected.time.replace(":", "h")}</p>}
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-2xl font-black text-primary leading-none">
+                  {preselected.price.toLocaleString("fr-FR")}
+                </p>
+                <p className="text-xs text-muted-foreground">{product.currency || "FCFA"}</p>
+              </div>
             </div>
-          )}
-        </div>
+            {promoApplied && finalPrice < basePrice && (
+              <div className="flex items-center gap-2 pt-1 border-t border-primary/20">
+                <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
+                <span className="text-sm text-green-600 font-medium">
+                  -{discountAmount.toLocaleString("fr-FR")} FCFA → {finalPrice === 0 ? "Gratuit" : `${finalPrice.toLocaleString("fr-FR")} FCFA`}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
 
-        {/* ── Logged-in: show profile banner instead of fields ── */}
+        {/* ── Non-coaching: price display ── */}
+        {!isCoaching && (
+          <div className="text-center py-2">
+            <span className="text-2xl font-black text-primary">
+              {isFree ? "Gratuit" : `${product.price.toLocaleString("fr-FR")} ${product.currency || "FCFA"}`}
+            </span>
+            {promoApplied && finalPrice < basePrice && (
+              <div className="flex items-center justify-center gap-2 mt-1">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                <span className="text-sm text-green-500 font-medium">
+                  -{discountAmount.toLocaleString("fr-FR")} FCFA → {finalPrice === 0 ? "Gratuit" : `${finalPrice.toLocaleString("fr-FR")} FCFA`}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Logged-in profile banner ── */}
         {isLoggedIn && (
           <div className="flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
             <UserCircle className="h-9 w-9 text-primary shrink-0" />
@@ -227,7 +257,8 @@ export function GuestCheckoutDialog({ open, onOpenChange, product }: GuestChecko
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* ── Guest fields ── */}
+
+          {/* ── Guest contact fields ── */}
           {!isLoggedIn && (
             <>
               <div className="space-y-2">
@@ -239,15 +270,13 @@ export function GuestCheckoutDialog({ open, onOpenChange, product }: GuestChecko
                 <Input id="guest-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="ton@email.com" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="guest-phone">
-                  Téléphone <span className="text-muted-foreground font-normal">(optionnel)</span>
-                </Label>
+                <Label htmlFor="guest-phone">Téléphone <span className="text-muted-foreground font-normal">(optionnel)</span></Label>
                 <Input id="guest-phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+221 77 000 00 00" />
               </div>
             </>
           )}
 
-          {/* Delivery address for books */}
+          {/* ── Delivery (books) ── */}
           {needsDelivery && (
             <div className="space-y-3 rounded-lg border border-border p-4">
               <Label className="font-semibold text-foreground">📦 Adresse de livraison</Label>
@@ -266,10 +295,10 @@ export function GuestCheckoutDialog({ open, onOpenChange, product }: GuestChecko
             </div>
           )}
 
-          {/* Coaching notes */}
+          {/* ── Coaching notes ── */}
           {isCoaching && (
             <div className="space-y-2 rounded-xl border border-primary/20 bg-primary/5 p-4">
-              <Label htmlFor="coaching-notes" className="font-semibold text-foreground flex items-center gap-2">
+              <Label htmlFor="coaching-notes" className="font-semibold text-foreground">
                 🎯 Points à aborder durant la séance
               </Label>
               <Textarea
@@ -277,7 +306,7 @@ export function GuestCheckoutDialog({ open, onOpenChange, product }: GuestChecko
                 value={coachingNotes}
                 onChange={(e) => setCoachingNotes(e.target.value)}
                 placeholder={"Ex :\n— Stratégie de prix pour mon offre\n— Comment prospecter sur LinkedIn\n— Développer ma présence en ligne"}
-                rows={5}
+                rows={4}
               />
               <p className="text-xs text-muted-foreground">
                 Ces informations aident à préparer ta séance pour qu'elle soit la plus efficace possible.
@@ -285,7 +314,7 @@ export function GuestCheckoutDialog({ open, onOpenChange, product }: GuestChecko
             </div>
           )}
 
-          {/* Promo code */}
+          {/* ── Promo code ── */}
           {!isFree && (
             <div className="space-y-2">
               <Label className="text-sm">Code promo</Label>

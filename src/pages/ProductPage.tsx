@@ -12,7 +12,7 @@ import {
   UserCheck, Users, ImageOff, Share2, Copy, Check,
 } from "lucide-react";
 import { GuestCheckoutDialog } from "@/components/GuestCheckoutDialog";
-import { DURATION_PRESETS } from "@/components/admin/AdminActivites";
+import { CoachingBookingWidget, type CoachingPreselected } from "@/components/CoachingBookingWidget";
 
 type Product = {
   id: string;
@@ -64,6 +64,12 @@ export default function ProductPage() {
   const [loading, setLoading] = useState(true);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [preselected, setPreselected] = useState<CoachingPreselected | null>(null);
+
+  const handleCheckoutOpenChange = (open: boolean) => {
+    setCheckoutOpen(open);
+    if (!open) setPreselected(null);
+  };
 
   const identifier = productId || slug || "";
 
@@ -225,26 +231,8 @@ export default function ProductPage() {
           transition={{ delay: 0.1 }}
           className="grid grid-cols-2 sm:grid-cols-4 gap-3"
         >
-          {/* Prix — coaching : tableau des durées, sinon prix fixe */}
-          {product.type === "coaching" && product.extra_config?.durations ? (
-            <div className="col-span-2 sm:col-span-4 rounded-xl border border-border bg-card p-4">
-              <p className="text-xs text-muted-foreground mb-3 font-medium">Tarifs par durée</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {DURATION_PRESETS.filter((p) => {
-                  const d = (product.extra_config!.durations as Record<string, { enabled: boolean; price: number }>)[p.minutes];
-                  return d?.enabled;
-                }).map((p) => {
-                  const d = (product.extra_config!.durations as Record<string, { enabled: boolean; price: number }>)[p.minutes];
-                  return (
-                    <div key={p.minutes} className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
-                      <span className="font-medium text-foreground">{p.label}</span>
-                      <span className="font-black text-primary">{d.price.toLocaleString("fr-FR")} <span className="text-xs font-normal text-muted-foreground">{product.currency || "FCFA"}</span></span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ) : (
+          {/* Prix — coaching : pas de carte prix (le widget gère tout), sinon prix fixe */}
+          {product.type !== "coaching" && (
             <div className="rounded-xl border border-border bg-card p-4 text-center">
               <p className="text-xs text-muted-foreground mb-1">Prix</p>
               <p className="text-xl font-black text-primary">
@@ -385,45 +373,47 @@ export default function ProductPage() {
           );
         })()}
 
-        {/* CTA principal */}
+        {/* CTA / Booking */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.25 }}
-          className="rounded-xl border border-border bg-card p-6 flex items-center justify-between gap-4"
         >
-          <div>
-            <p className="text-sm text-muted-foreground mb-1">
-              {isClosed ? "Formation complète" : isFormation ? "Réserve ta place" : "Accède au contenu"}
-            </p>
-            <span className="text-3xl font-black text-primary">
-              {isFree ? "Gratuit" : (
-                <>
-                  {product.type === "coaching" && <span className="text-sm font-normal text-muted-foreground block mb-0.5">À partir de</span>}
-                  {product.price.toLocaleString("fr-FR")} {product.currency || "FCFA"}
-                </>
-              )}
-            </span>
-          </div>
-          {isFree ? (
-            <Badge variant="secondary" className="text-sm px-4 py-2">Accès gratuit</Badge>
-          ) : isClosed ? (
-            <Button
-              size="lg"
-              variant="outline"
-              className="font-bold gap-2"
-              onClick={() => setCheckoutOpen(true)}
-            >
-              Liste d'attente <ArrowRight className="h-4 w-4" />
-            </Button>
+          {product.type === "coaching" && product.extra_config?.durations ? (
+            /* ── Coaching: interactive booking widget ── */
+            <CoachingBookingWidget
+              extraConfig={product.extra_config}
+              currency={product.currency}
+              isClosed={isClosed}
+              onBook={(sel) => { setPreselected(sel); setCheckoutOpen(true); }}
+            />
           ) : (
-            <Button
-              size="lg"
-              className="bg-primary text-primary-foreground hover:bg-primary/90 font-bold gap-2"
-              onClick={() => setCheckoutOpen(true)}
-            >
-              {isFormation ? "S'inscrire" : "Obtenir l'accès"} <ArrowRight className="h-4 w-4" />
-            </Button>
+            /* ── Other products: standard CTA card ── */
+            <div className="rounded-xl border border-border bg-card p-6 flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">
+                  {isClosed ? "Complet" : isFormation ? "Réserve ta place" : "Accède au contenu"}
+                </p>
+                <span className="text-3xl font-black text-primary">
+                  {isFree ? "Gratuit" : `${product.price.toLocaleString("fr-FR")} ${product.currency || "FCFA"}`}
+                </span>
+              </div>
+              {isFree ? (
+                <Badge variant="secondary" className="text-sm px-4 py-2">Accès gratuit</Badge>
+              ) : isClosed ? (
+                <Button size="lg" variant="outline" className="font-bold gap-2" onClick={() => setCheckoutOpen(true)}>
+                  Liste d'attente <ArrowRight className="h-4 w-4" />
+                </Button>
+              ) : (
+                <Button
+                  size="lg"
+                  className="bg-primary text-primary-foreground hover:bg-primary/90 font-bold gap-2"
+                  onClick={() => setCheckoutOpen(true)}
+                >
+                  {isFormation ? "S'inscrire" : "Obtenir l'accès"} <ArrowRight className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
           )}
         </motion.div>
 
@@ -562,7 +552,7 @@ export default function ProductPage() {
       {product && (
         <GuestCheckoutDialog
           open={checkoutOpen}
-          onOpenChange={setCheckoutOpen}
+          onOpenChange={handleCheckoutOpenChange}
           product={{
             id: product.id,
             title: product.title,
@@ -570,6 +560,7 @@ export default function ProductPage() {
             currency: product.currency,
             type: product.type,
           }}
+          preselected={preselected ?? undefined}
         />
       )}
     </div>
