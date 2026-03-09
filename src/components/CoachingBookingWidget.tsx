@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Clock, CalendarDays, ArrowRight, Check } from "lucide-react";
-import { DURATION_PRESETS } from "@/components/admin/AdminActivites";
+import { DURATION_PRESETS } from "@/constants/activities";
 
 /* ─── French locale helpers ─── */
 const FR_DAYS_SHORT = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];

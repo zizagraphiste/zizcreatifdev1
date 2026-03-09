@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { GuestCheckoutDialog } from "@/components/GuestCheckoutDialog";
 import { CoachingBookingWidget, type CoachingPreselected } from "@/components/CoachingBookingWidget";
-import { DRESS_CODES } from "@/components/admin/AdminActivites";
+import { DRESS_CODES } from "@/constants/activities";
 
 type Product = {
   id: string;
