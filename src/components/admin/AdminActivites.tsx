@@ -397,7 +397,7 @@ const EMPTY_FORM = {
 
 const EMPTY_TYPE_FORM = { value: "", label: "", emoji: "📅", icon_name: "", sort_order: 0 };
 
-const DRESS_CODES = [
+export const DRESS_CODES = [
   { value: "", label: "Aucun dress code" },
   { value: "casual", label: "Décontracté" },
   { value: "smart_casual", label: "Smart casual" },
@@ -505,6 +505,7 @@ export default function AdminActivites() {
       event_time: isCoaching ? null : (form.event_time || null),
       attendance_mode: form.attendance_mode,
       venue: form.attendance_mode !== "online" ? (form.venue.trim() || null) : null,
+      online_link: form.online_link.trim() || null,
       max_spots: Number(form.max_spots) || 0,
       thumbnail_emoji: form.thumbnail_emoji || null,
       cover_image_url: form.cover_image_url || null,

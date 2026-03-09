@@ -10,9 +10,11 @@ import {
   ArrowLeft, ArrowRight, Lock, Unlock, ExternalLink, Download,
   BookOpen, ClipboardCheck, MapPin, Video, Calendar, Clock,
   UserCheck, Users, ImageOff, Share2, Copy, Check,
+  Utensils, TreePine, Rocket, Wine, Shirt, Moon,
 } from "lucide-react";
 import { GuestCheckoutDialog } from "@/components/GuestCheckoutDialog";
 import { CoachingBookingWidget, type CoachingPreselected } from "@/components/CoachingBookingWidget";
+import { DRESS_CODES } from "@/components/admin/AdminActivites";
 
 type Product = {
   id: string;
@@ -31,8 +33,10 @@ type Product = {
   online_link: string | null;
   event_time: string | null;
   delivery_date: string | null;
+  end_date: string | null;
   date_mode: string | null;
   delivery_mode: string | null;
+  online_link: string | null;
   extra_config: Record<string, any> | null;
 };
 
@@ -78,7 +82,7 @@ export default function ProductPage() {
     (async () => {
       const query = supabase
         .from("products")
-        .select("id, title, description, thumbnail_emoji, cover_image_url, price, currency, max_spots, spots_taken, status, type, attendance_mode, venue, online_link, event_time, delivery_date, date_mode, delivery_mode, extra_config");
+        .select("id, title, description, thumbnail_emoji, cover_image_url, price, currency, max_spots, spots_taken, status, type, attendance_mode, venue, online_link, event_time, delivery_date, end_date, date_mode, delivery_mode, extra_config");
 
       const { data: p } = await (isUUID(identifier)
         ? query.eq("id", identifier).single()
@@ -156,7 +160,21 @@ export default function ProductPage() {
   const paidModulesCount = modules.length - freeModules.length;
   const spotsPercent = unlimited ? 0 : Math.min(100, ((product.spots_taken || 0) / product.max_spots) * 100);
   const isFormation = product.type === "formation";
+  const isMasterclass = product.type === "masterclass";
+  const isDiner = product.type === "diner";
+  const isWeekend = product.type === "weekend";
+  const isLiveEvent = isFormation || isMasterclass; // events with venue/online/spots
+  const isDigitalProduct = ["guide", "book", "app"].includes(product.type || "");
   const isOnline = product.attendance_mode !== "in-person";
+
+  const getNightCount = (start: string, end: string) => {
+    if (!start || !end) return null;
+    const diff = (new Date(end).getTime() - new Date(start).getTime()) / 86400000;
+    return diff > 0 ? Math.round(diff) : null;
+  };
+  const weekendNights = isWeekend
+    ? getNightCount(product.delivery_date || "", product.end_date || "")
+    : null;
 
   const formatDate = (d: string | null) => {
     if (!d) return null;
@@ -286,8 +304,8 @@ export default function ProductPage() {
           )}
         </motion.div>
 
-        {/* Formation details extra */}
-        {isFormation && (product.venue || (isOnline) || product.event_time) && (
+        {/* ── Formation / Masterclass details ── */}
+        {isLiveEvent && (product.venue || isOnline || product.event_time) && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -299,49 +317,144 @@ export default function ProductPage() {
             </h3>
             <div className="grid gap-2 text-sm text-muted-foreground">
               {isOnline && (
-                <div className="flex items-center gap-2">
-                  <Video className="h-4 w-4 text-primary shrink-0" />
-                  <span>Session en ligne</span>
-                </div>
+                <div className="flex items-center gap-2"><Video className="h-4 w-4 text-primary shrink-0" /><span>Session en ligne</span></div>
               )}
               {!isOnline && product.venue && (
-                <div className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-primary shrink-0" />
-                  <span>{product.venue}</span>
-                </div>
+                <div className="flex items-center gap-2"><MapPin className="h-4 w-4 text-primary shrink-0" /><span>{product.venue}</span></div>
               )}
               {product.event_time && (
-                <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-primary shrink-0" />
-                  <span>{product.event_time}</span>
-                </div>
+                <div className="flex items-center gap-2"><Clock className="h-4 w-4 text-primary shrink-0" /><span>{product.event_time}</span></div>
               )}
               {!unlimited && (
-                <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4 text-primary shrink-0" />
-                  <span>Groupe limité à {product.max_spots} participants</span>
-                </div>
+                <div className="flex items-center gap-2"><Users className="h-4 w-4 text-primary shrink-0" /><span>Groupe limité à {product.max_spots} participants</span></div>
               )}
             </div>
-
-            {/* Progress bar places */}
             {!unlimited && (
               <div className="space-y-1.5 pt-1">
                 <div className="flex justify-between text-xs text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <UserCheck className="h-3.5 w-3.5" />
-                    {isClosed ? "Formation complète — liste d'attente disponible" : `${spotsLeft} place${spotsLeft > 1 ? "s" : ""} restante${spotsLeft > 1 ? "s" : ""}`}
+                    {isClosed ? "Complet — liste d'attente disponible" : `${spotsLeft} place${spotsLeft > 1 ? "s" : ""} restante${spotsLeft > 1 ? "s" : ""}`}
                   </span>
                   <span>{product.spots_taken || 0}/{product.max_spots}</span>
                 </div>
                 <div className="h-2 rounded-full bg-muted overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all ${
-                      spotsPercent >= 80 ? "bg-destructive" : spotsPercent >= 50 ? "bg-orange-500" : "bg-primary"
-                    }`}
-                    style={{ width: `${spotsPercent}%` }}
-                  />
+                  <div className={`h-full rounded-full transition-all ${spotsPercent >= 80 ? "bg-destructive" : spotsPercent >= 50 ? "bg-orange-500" : "bg-primary"}`} style={{ width: `${spotsPercent}%` }} />
                 </div>
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {/* ── Dîner avec le mentor ── */}
+        {isDiner && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-5 space-y-3"
+          >
+            <h3 className="font-bold text-foreground flex items-center gap-2">
+              <Utensils className="h-4 w-4 text-amber-500" /> Détails du dîner
+            </h3>
+            <div className="grid gap-2 text-sm text-muted-foreground">
+              {product.venue && (
+                <div className="flex items-center gap-2"><MapPin className="h-4 w-4 text-amber-500 shrink-0" /><span className="font-medium text-foreground">{product.venue}</span></div>
+              )}
+              {product.extra_config?.address && (
+                <div className="flex items-center gap-2"><MapPin className="h-4 w-4 text-muted-foreground shrink-0" /><span>{product.extra_config.address}</span></div>
+              )}
+              {product.event_time && (
+                <div className="flex items-center gap-2"><Clock className="h-4 w-4 text-amber-500 shrink-0" /><span>{product.event_time}</span></div>
+              )}
+              {product.extra_config?.dress_code && (
+                <div className="flex items-center gap-2">
+                  <Shirt className="h-4 w-4 text-amber-500 shrink-0" />
+                  <span>{DRESS_CODES.find(d => d.value === product.extra_config?.dress_code)?.label || product.extra_config.dress_code}</span>
+                </div>
+              )}
+              {product.extra_config?.drinks_included && (
+                <div className="flex items-center gap-2"><Wine className="h-4 w-4 text-amber-500 shrink-0" /><span>Boissons incluses</span></div>
+              )}
+              {!unlimited && (
+                <div className="flex items-center gap-2"><Users className="h-4 w-4 text-amber-500 shrink-0" /><span>{spotsLeft === Infinity ? "Places disponibles" : `${spotsLeft} place${(spotsLeft as number) > 1 ? "s" : ""} restante${(spotsLeft as number) > 1 ? "s" : ""}`}</span></div>
+              )}
+            </div>
+            {product.extra_config?.menu && (
+              <div className="pt-2 border-t border-amber-500/20">
+                <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 mb-1.5">Menu</p>
+                <p className="text-sm text-muted-foreground whitespace-pre-line">{product.extra_config.menu}</p>
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {/* ── Week-end Détox ── */}
+        {isWeekend && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            className="rounded-xl border border-green-500/30 bg-green-500/5 p-5 space-y-4"
+          >
+            <h3 className="font-bold text-foreground flex items-center gap-2">
+              <TreePine className="h-4 w-4 text-green-500" /> Détails du séjour
+            </h3>
+            <div className="grid gap-2 text-sm text-muted-foreground">
+              {product.venue && (
+                <div className="flex items-center gap-2"><MapPin className="h-4 w-4 text-green-500 shrink-0" /><span className="font-medium text-foreground">{product.venue}</span></div>
+              )}
+              {product.extra_config?.address && (
+                <div className="flex items-center gap-2"><MapPin className="h-4 w-4 text-muted-foreground shrink-0" /><span>{product.extra_config.address}</span></div>
+              )}
+              {product.delivery_date && (
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-green-500 shrink-0" />
+                  <span>
+                    {formatDate(product.delivery_date)}
+                    {product.end_date && ` → ${formatDate(product.end_date)}`}
+                    {weekendNights && ` · ${weekendNights} nuit${weekendNights > 1 ? "s" : ""}`}
+                  </span>
+                </div>
+              )}
+              {product.event_time && (
+                <div className="flex items-center gap-2"><Clock className="h-4 w-4 text-green-500 shrink-0" /><span>Arrivée à {product.event_time}</span></div>
+              )}
+              {product.extra_config?.departure_time && (
+                <div className="flex items-center gap-2"><Moon className="h-4 w-4 text-green-500 shrink-0" /><span>Départ à {product.extra_config.departure_time}</span></div>
+              )}
+              {!unlimited && (
+                <div className="flex items-center gap-2"><Users className="h-4 w-4 text-green-500 shrink-0" /><span>{spotsLeft === Infinity ? "" : `${spotsLeft} place${(spotsLeft as number) > 1 ? "s" : ""} restante${(spotsLeft as number) > 1 ? "s" : ""}`}</span></div>
+              )}
+            </div>
+            {/* Inclus */}
+            {(product.extra_config?.accommodation_included || product.extra_config?.meals_included || product.extra_config?.transport_included) && (
+              <div>
+                <p className="text-xs font-semibold text-green-600 dark:text-green-400 mb-2">Inclus dans le prix</p>
+                <div className="flex flex-wrap gap-2">
+                  {product.extra_config?.accommodation_included && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-green-500/30 bg-green-500/10 px-3 py-1 text-xs font-medium text-green-700 dark:text-green-400">
+                      <TreePine className="h-3 w-3" /> Hébergement
+                    </span>
+                  )}
+                  {product.extra_config?.meals_included && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-green-500/30 bg-green-500/10 px-3 py-1 text-xs font-medium text-green-700 dark:text-green-400">
+                      <Utensils className="h-3 w-3" /> Repas
+                    </span>
+                  )}
+                  {product.extra_config?.transport_included && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-green-500/30 bg-green-500/10 px-3 py-1 text-xs font-medium text-green-700 dark:text-green-400">
+                      <Rocket className="h-3 w-3" /> Transport
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+            {/* Programme */}
+            {product.extra_config?.programme && (
+              <div className="pt-2 border-t border-green-500/20">
+                <p className="text-xs font-semibold text-green-600 dark:text-green-400 mb-2">Programme</p>
+                <p className="text-sm text-muted-foreground whitespace-pre-line">{product.extra_config.programme}</p>
               </div>
             )}
           </motion.div>
@@ -389,31 +502,49 @@ export default function ProductPage() {
             />
           ) : (
             /* ── Other products: standard CTA card ── */
-            <div className="rounded-xl border border-border bg-card p-6 flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">
-                  {isClosed ? "Complet" : isFormation ? "Réserve ta place" : "Accède au contenu"}
-                </p>
-                <span className="text-3xl font-black text-primary">
-                  {isFree ? "Gratuit" : `${product.price.toLocaleString("fr-FR")} ${product.currency || "FCFA"}`}
-                </span>
-              </div>
-              {isFree ? (
-                <Badge variant="secondary" className="text-sm px-4 py-2">Accès gratuit</Badge>
-              ) : isClosed ? (
-                <Button size="lg" variant="outline" className="font-bold gap-2" onClick={() => setCheckoutOpen(true)}>
-                  Liste d'attente <ArrowRight className="h-4 w-4" />
-                </Button>
-              ) : (
-                <Button
-                  size="lg"
-                  className="bg-primary text-primary-foreground hover:bg-primary/90 font-bold gap-2"
-                  onClick={() => setCheckoutOpen(true)}
-                >
-                  {isFormation ? "S'inscrire" : "Obtenir l'accès"} <ArrowRight className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
+            (() => {
+              const ctaLabel = isDigitalProduct
+                ? "Obtenir l'accès"
+                : isDiner
+                ? "Réserver ma place"
+                : isWeekend
+                ? "Réserver mon séjour"
+                : isMasterclass
+                ? "Réserver ma place"
+                : isFormation
+                ? "S'inscrire"
+                : "Obtenir l'accès";
+              const ctaSubtitle = isClosed
+                ? "Complet"
+                : isDigitalProduct
+                ? "Accède au contenu"
+                : "Réserve ta place";
+              return (
+                <div className="rounded-xl border border-border bg-card p-6 flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">{ctaSubtitle}</p>
+                    <span className="text-3xl font-black text-primary">
+                      {isFree ? "Gratuit" : `${product.price.toLocaleString("fr-FR")} ${product.currency || "FCFA"}`}
+                    </span>
+                  </div>
+                  {isFree ? (
+                    <Badge variant="secondary" className="text-sm px-4 py-2">Accès gratuit</Badge>
+                  ) : isClosed ? (
+                    <Button size="lg" variant="outline" className="font-bold gap-2" onClick={() => setCheckoutOpen(true)}>
+                      Liste d'attente <ArrowRight className="h-4 w-4" />
+                    </Button>
+                  ) : (
+                    <Button
+                      size="lg"
+                      className="bg-primary text-primary-foreground hover:bg-primary/90 font-bold gap-2"
+                      onClick={() => setCheckoutOpen(true)}
+                    >
+                      {ctaLabel} <ArrowRight className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              );
+            })()
           )}
         </motion.div>
 
