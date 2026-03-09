@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowRight, Sparkles, BookOpen, Users, Zap, MapPin, Video, Calendar, Clock, UserCheck, CalendarHeart } from "lucide-react";
 
 // Activity types are fetched dynamically from the DB — no hardcoded list here
+import { ActivityIcon } from "@/components/admin/AdminActivites";
 
 
 type Category = { id: string; name: string; sort_order: number };
@@ -580,7 +581,7 @@ function FormationsSection() {
 }
 
 // ── Activity type display config ──
-type ActivityTypeInfo = { value: string; label: string; emoji: string };
+type ActivityTypeInfo = { value: string; label: string; emoji: string; icon_name: string | null };
 
 function ActivityCard({ product, index, typeMap }: { product: Product; index: number; typeMap: Record<string, ActivityTypeInfo> }) {
   const navigate = useNavigate();
@@ -606,7 +607,10 @@ function ActivityCard({ product, index, typeMap }: { product: Product; index: nu
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
         <div className="absolute top-3 left-3">
-          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold backdrop-blur-sm text-primary bg-primary/20">{info.emoji} {info.label}</span>
+          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold backdrop-blur-sm text-primary bg-primary/20">
+            <ActivityIcon iconName={(info as any).icon_name} emoji={info.emoji} className="h-3.5 w-3.5" />
+            {info.label}
+          </span>
         </div>
         {isClosed && <div className="absolute top-3 right-3"><Badge className="bg-destructive text-destructive-foreground text-xs">Complet</Badge></div>}
         <div className="absolute bottom-3 left-3">
@@ -658,7 +662,7 @@ function ActivitesSection() {
       // 1. Fetch activity types from DB
       const { data: typesData } = await supabase
         .from("activity_types" as any)
-        .select("value, label, emoji")
+        .select("value, label, emoji, icon_name")
         .order("sort_order", { ascending: true });
       const types: ActivityTypeInfo[] = (typesData as any[]) || [];
       setActivityTypes(types);
@@ -698,7 +702,10 @@ function ActivitesSection() {
         {activityTypes.length > 0 && (
           <div className="flex flex-wrap justify-center gap-2">
             {activityTypes.map((t) => (
-              <span key={t.value} className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium text-primary bg-primary/10">{t.emoji} {t.label}</span>
+              <span key={t.value} className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium text-primary bg-primary/10">
+                <ActivityIcon iconName={t.icon_name} emoji={t.emoji} className="h-3.5 w-3.5" />
+                {t.label}
+              </span>
             ))}
           </div>
         )}
