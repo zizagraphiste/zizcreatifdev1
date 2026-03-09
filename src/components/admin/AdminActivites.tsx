@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Plus, Edit, Trash2, Calendar, MapPin, Video, Users, Tag,
   Settings, GripVertical, Check, X,
+  ChevronDown, ChevronLeft, ChevronRight, Archive,
   /* ── Icônes disponibles pour les types ── */
   Zap, Star, Heart, BookOpen, Coffee, Sun, Moon, Music,
   Camera, Globe, Smile, Trophy, Target, Rocket, Leaf, Flame,
@@ -22,6 +23,263 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+
+/* ═══════════════ COACHING CONSTANTS ═══════════════ */
+const DURATION_PRESETS = [
+  { minutes: 30, label: "30 min" },
+  { minutes: 45, label: "45 min" },
+  { minutes: 60, label: "1 h" },
+  { minutes: 90, label: "1 h 30" },
+  { minutes: 120, label: "2 h" },
+];
+const FR_DAYS_SHORT = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
+const FR_MONTHS = [
+  "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+  "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre",
+];
+
+/* ═══════════════ COACHING SECTION ═══════════════ */
+function CoachingSection({
+  extra,
+  currency,
+  onChange,
+}: {
+  extra: Record<string, any>;
+  currency: string;
+  onChange: (key: string, val: any) => void;
+}) {
+  const now = new Date();
+  const [calYear, setCalYear] = useState(now.getFullYear());
+  const [calMonth, setCalMonth] = useState(now.getMonth());
+
+  const durations: Record<number, { enabled: boolean; price: number }> = extra.durations || {};
+  const availableDays: number[] = extra.available_days ?? [0, 1, 2, 3, 4];
+  const blockedDates: string[] = extra.blocked_dates || [];
+  const timeStart: string = extra.available_time_start || "09:00";
+  const timeEnd: string = extra.available_time_end || "18:00";
+
+  const toggleDuration = (minutes: number, checked: boolean) => {
+    const next = {
+      ...durations,
+      [minutes]: { enabled: checked, price: durations[minutes]?.price ?? 0 },
+    };
+    onChange("durations", next);
+  };
+  const setDurationPrice = (minutes: number, price: number) => {
+    const next = {
+      ...durations,
+      [minutes]: { enabled: durations[minutes]?.enabled ?? true, price },
+    };
+    onChange("durations", next);
+  };
+
+  const toggleDay = (frIdx: number) => {
+    const next = availableDays.includes(frIdx)
+      ? availableDays.filter((d) => d !== frIdx)
+      : [...availableDays, frIdx].sort();
+    onChange("available_days", next);
+  };
+
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const firstFrIdx = ((new Date(calYear, calMonth, 1).getDay() + 6) % 7);
+
+  const toggleBlockDate = (dateStr: string) => {
+    const next = blockedDates.includes(dateStr)
+      ? blockedDates.filter((d) => d !== dateStr)
+      : [...blockedDates, dateStr];
+    onChange("blocked_dates", next);
+  };
+
+  const prevMonth = () => {
+    if (calMonth === 0) { setCalYear((y) => y - 1); setCalMonth(11); }
+    else setCalMonth((m) => m - 1);
+  };
+  const nextMonth = () => {
+    if (calMonth === 11) { setCalYear((y) => y + 1); setCalMonth(0); }
+    else setCalMonth((m) => m + 1);
+  };
+
+  return (
+    <div className="space-y-5 rounded-xl border border-primary/20 bg-primary/5 p-4">
+      <p className="text-sm font-semibold text-foreground flex items-center gap-2">
+        <Clock className="h-4 w-4 text-primary" /> Coaching 1:1 — Disponibilités &amp; tarifs
+      </p>
+
+      {/* ── Durées & tarifs ── */}
+      <div className="space-y-2">
+        <Label>Durées proposées</Label>
+        <div className="space-y-2">
+          {DURATION_PRESETS.map(({ minutes, label }) => {
+            const d = durations[minutes];
+            const enabled = d?.enabled ?? false;
+            return (
+              <div
+                key={minutes}
+                className={cn(
+                  "flex items-center gap-3 rounded-lg border p-2.5 transition-all",
+                  enabled ? "border-primary/30 bg-background" : "border-border bg-background/50 opacity-60"
+                )}
+              >
+                <input
+                  type="checkbox"
+                  checked={enabled}
+                  onChange={(e) => toggleDuration(minutes, e.target.checked)}
+                  className="h-4 w-4 rounded border-border accent-primary shrink-0"
+                />
+                <span className="text-sm font-medium text-foreground w-14 shrink-0">{label}</span>
+                {enabled ? (
+                  <>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={d?.price ?? 0}
+                      onChange={(e) => setDurationPrice(minutes, Number(e.target.value))}
+                      className="h-8 flex-1"
+                      placeholder="Prix"
+                    />
+                    <span className="text-xs text-muted-foreground shrink-0">{currency || "FCFA"}</span>
+                  </>
+                ) : (
+                  <span className="text-xs text-muted-foreground italic">non proposée</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Plage horaire ── */}
+      <div className="space-y-2">
+        <Label>Plage horaire de disponibilité</Label>
+        <div className="flex items-center gap-3">
+          <Input
+            type="time"
+            value={timeStart}
+            onChange={(e) => onChange("available_time_start", e.target.value)}
+            className="h-9 w-32"
+          />
+          <span className="text-sm text-muted-foreground">→</span>
+          <Input
+            type="time"
+            value={timeEnd}
+            onChange={(e) => onChange("available_time_end", e.target.value)}
+            className="h-9 w-32"
+          />
+        </div>
+      </div>
+
+      {/* ── Jours disponibles ── */}
+      <div className="space-y-2">
+        <Label>Jours de disponibilité</Label>
+        <div className="flex gap-1.5 flex-wrap">
+          {FR_DAYS_SHORT.map((day, frIdx) => (
+            <button
+              key={frIdx}
+              type="button"
+              onClick={() => toggleDay(frIdx)}
+              className={cn(
+                "h-9 w-12 rounded-lg text-xs font-semibold transition-all border",
+                availableDays.includes(frIdx)
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-background text-muted-foreground border-border hover:border-primary/50"
+              )}
+            >
+              {day}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Calendrier — jours bloqués ── */}
+      <div className="space-y-2">
+        <Label>Jours bloqués (cliquer pour bloquer/débloquer)</Label>
+        <div className="rounded-xl border border-border bg-card overflow-hidden">
+          {/* Navigation mois */}
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
+            <button
+              type="button"
+              onClick={prevMonth}
+              className="rounded-lg p-1.5 hover:bg-muted transition-colors"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <span className="text-sm font-semibold text-foreground">
+              {FR_MONTHS[calMonth]} {calYear}
+            </span>
+            <button
+              type="button"
+              onClick={nextMonth}
+              className="rounded-lg p-1.5 hover:bg-muted transition-colors"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+
+          {/* Noms des jours */}
+          <div className="grid grid-cols-7 border-b border-border bg-muted/20">
+            {FR_DAYS_SHORT.map((d) => (
+              <div key={d} className="py-1.5 text-center text-[10px] font-semibold text-muted-foreground">
+                {d}
+              </div>
+            ))}
+          </div>
+
+          {/* Grille des jours */}
+          <div className="grid grid-cols-7 p-1 gap-0.5">
+            {Array.from({ length: firstFrIdx }).map((_, i) => (
+              <div key={`e${i}`} className="h-8" />
+            ))}
+            {Array.from({ length: daysInMonth }).map((_, i) => {
+              const day = i + 1;
+              const dateStr = `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+              const jsDay = new Date(calYear, calMonth, day).getDay();
+              const frIdx = (jsDay + 6) % 7;
+              const isAvailDay = availableDays.includes(frIdx);
+              const isBlocked = blockedDates.includes(dateStr);
+              const todayStr = new Date().toISOString().slice(0, 10);
+              const isPast = dateStr < todayStr;
+              return (
+                <button
+                  key={day}
+                  type="button"
+                  disabled={isPast}
+                  onClick={() => toggleBlockDate(dateStr)}
+                  className={cn(
+                    "h-8 text-xs font-medium transition-all flex items-center justify-center rounded-md",
+                    isPast
+                      ? "text-muted-foreground/30 cursor-default"
+                      : isBlocked
+                      ? "bg-destructive/20 text-destructive line-through hover:bg-destructive/30"
+                      : isAvailDay
+                      ? "bg-primary/10 text-primary hover:bg-primary/20"
+                      : "text-muted-foreground hover:bg-muted/50"
+                  )}
+                >
+                  {day}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Légende */}
+          <div className="px-4 py-2 border-t border-border flex gap-4 text-[10px] text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <span className="h-3 w-3 rounded bg-primary/10 border border-primary/20" /> Disponible
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-3 w-3 rounded bg-destructive/20 border border-destructive/20" /> Bloqué
+            </span>
+          </div>
+        </div>
+        {blockedDates.length > 0 && (
+          <p className="text-xs text-muted-foreground">
+            {blockedDates.length} jour{blockedDates.length > 1 ? "s" : ""} bloqué{blockedDates.length > 1 ? "s" : ""}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 /* ═══════════════ ICON SYSTEM ═══════════════ */
 export const ACTIVITY_ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -155,6 +413,7 @@ export default function AdminActivites() {
   const [editing, setEditing] = useState<Activity | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [showPast, setShowPast] = useState(false);
 
   /* ── Types ── */
   const [types, setTypes] = useState<ActivityType[]>([]);
@@ -221,15 +480,17 @@ export default function AdminActivites() {
     if (!form.type) { toast.error("Choisissez un type d'activité"); return; }
     setSaving(true);
 
+    const isCoaching = form.type === "coaching";
+
     const payload: any = {
       title: form.title.trim(),
       description: form.description.trim() || null,
       type: form.type,
-      price: Number(form.price) || 0,
+      price: isCoaching ? 0 : (Number(form.price) || 0),
       currency: form.currency || "FCFA",
-      delivery_date: form.delivery_date || null,
+      delivery_date: isCoaching ? null : (form.delivery_date || null),
       end_date: form.type === "weekend" ? (form.end_date || null) : null,
-      event_time: form.event_time || null,
+      event_time: isCoaching ? null : (form.event_time || null),
       attendance_mode: form.attendance_mode,
       venue: form.attendance_mode !== "online" ? (form.venue.trim() || null) : null,
       max_spots: Number(form.max_spots) || 0,
@@ -253,10 +514,16 @@ export default function AdminActivites() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Supprimer cette activité ?")) return;
+    if (!confirm("Supprimer cette activité définitivement ?")) return;
     const { error } = await supabase.from("products").delete().eq("id", id);
     if (error) toast.error(error.message);
-    else { toast.success("Supprimée"); fetchActivities(); }
+    else { toast.success("Activité supprimée"); fetchActivities(); }
+  };
+
+  const handleArchive = async (id: string) => {
+    await supabase.from("products").update({ status: "draft" }).eq("id", id);
+    toast.success("Activité archivée (brouillon)");
+    fetchActivities();
   };
 
   const toggleStatus = async (a: Activity) => {
@@ -318,12 +585,141 @@ export default function AdminActivites() {
   const typeValues = types.map((t) => t.value);
   const filteredActivities = activities.filter((a) => a.type && typeValues.includes(a.type));
 
-  /* ─── Duration display for weekend ─── */
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const upcoming = filteredActivities.filter(
+    (a) => a.type === "coaching" || !a.delivery_date || a.delivery_date >= todayStr
+  );
+  const past = filteredActivities.filter(
+    (a) => a.type !== "coaching" && a.delivery_date && a.delivery_date < todayStr
+  );
+
   const getNightCount = (start: string, end: string) => {
     if (!start || !end) return null;
     const diff = (new Date(end).getTime() - new Date(start).getTime()) / 86400000;
     if (diff <= 0) return null;
     return Math.round(diff);
+  };
+
+  /* ── Render one activity card ── */
+  const renderActivityCard = (a: Activity, isPast = false) => {
+    const tInfo = typeRecord[a.type || ""];
+    const spotsLeft = a.max_spots > 0 ? a.max_spots - (a.spots_taken || 0) : null;
+    const nights = a.type === "weekend" ? getNightCount(a.delivery_date || "", a.end_date || "") : null;
+    const isCoaching = a.type === "coaching";
+
+    /* coaching duration labels */
+    const coachingDurations = isCoaching && a.extra_config?.durations
+      ? Object.entries(a.extra_config.durations as Record<string, { enabled: boolean; price: number }>)
+          .filter(([, d]) => d.enabled)
+          .map(([min, d]) => {
+            const label = DURATION_PRESETS.find((p) => p.minutes === Number(min))?.label || `${min}min`;
+            return `${label} · ${d.price.toLocaleString("fr-FR")} ${a.currency || "FCFA"}`;
+          })
+      : [];
+
+    return (
+      <div
+        key={a.id}
+        className={cn(
+          "flex items-center gap-4 rounded-xl border bg-card p-4",
+          isPast ? "border-border/50 opacity-75" : "border-border"
+        )}
+      >
+        <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 text-primary overflow-hidden">
+          {a.cover_image_url
+            ? <img src={a.cover_image_url} alt="" className="w-full h-full object-cover" />
+            : tInfo ? <ActivityIcon iconName={tInfo.icon_name} emoji={tInfo.emoji} className="h-6 w-6" /> : <Calendar className="h-6 w-6" />
+          }
+        </div>
+
+        <div className="flex-1 min-w-0 space-y-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="font-semibold text-foreground truncate">{a.title}</h3>
+            {tInfo && (
+              <Badge variant="secondary" className="text-xs shrink-0">{tInfo.label}</Badge>
+            )}
+            <Badge className={cn(
+              "text-xs shrink-0",
+              a.status === "active" ? "bg-green-500/15 text-green-500" : "bg-muted text-muted-foreground"
+            )}>
+              {a.status === "active" ? "Actif" : "Brouillon"}
+            </Badge>
+            {isPast && (
+              <Badge variant="outline" className="text-xs shrink-0 text-muted-foreground">Passée</Badge>
+            )}
+          </div>
+
+          <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+            {isCoaching ? (
+              <span className="flex items-center gap-1">
+                <Clock className="h-3 w-3" /> Sur réservation
+              </span>
+            ) : a.delivery_date ? (
+              <span className="flex items-center gap-1">
+                <Calendar className="h-3 w-3" />
+                {new Date(a.delivery_date).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}
+                {a.end_date && ` → ${new Date(a.end_date).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}`}
+                {nights && ` · ${nights} nuit${nights > 1 ? "s" : ""}`}
+                {a.event_time && ` à ${a.event_time}`}
+              </span>
+            ) : null}
+            {a.venue && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {a.venue}</span>}
+            {spotsLeft !== null && <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {spotsLeft} place{spotsLeft > 1 ? "s" : ""}</span>}
+            {isCoaching && coachingDurations.length > 0 ? (
+              <span className="flex items-center gap-1 font-semibold text-primary flex-wrap">
+                <Tag className="h-3 w-3 shrink-0" />
+                {coachingDurations.join(" | ")}
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 font-semibold text-primary">
+                <Tag className="h-3 w-3" />
+                {a.price > 0 ? `${a.price.toLocaleString("fr-FR")} ${a.currency || "FCFA"}` : "Gratuit"}
+              </span>
+            )}
+          </div>
+
+          {/* Weekend extras */}
+          {a.type === "weekend" && a.extra_config && (
+            <div className="flex gap-2 flex-wrap">
+              {(a.extra_config as any).accommodation_included && <Badge variant="outline" className="text-xs gap-1"><TreePine className="h-2.5 w-2.5" /> Hébergement</Badge>}
+              {(a.extra_config as any).meals_included && <Badge variant="outline" className="text-xs gap-1"><Utensils className="h-2.5 w-2.5" /> Repas</Badge>}
+              {(a.extra_config as any).transport_included && <Badge variant="outline" className="text-xs gap-1"><Rocket className="h-2.5 w-2.5" /> Transport</Badge>}
+            </div>
+          )}
+          {/* Diner extras */}
+          {a.type === "diner" && a.extra_config && (a.extra_config as any).dress_code && (
+            <Badge variant="outline" className="text-xs gap-1">
+              <Shirt className="h-2.5 w-2.5" />
+              {DRESS_CODES.find(d => d.value === (a.extra_config as any).dress_code)?.label || (a.extra_config as any).dress_code}
+            </Badge>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <Switch checked={a.status === "active"} onCheckedChange={() => toggleStatus(a)} />
+          <Button variant="ghost" size="icon" onClick={() => openEdit(a)}><Edit className="h-4 w-4" /></Button>
+          {!isPast && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10"
+              title="Archiver"
+              onClick={() => handleArchive(a.id)}
+            >
+              <Archive className="h-4 w-4" />
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-destructive hover:bg-destructive/10"
+            onClick={() => handleDelete(a.id)}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    );
   };
 
   /* ════════════════════════ UI ════════════════════════ */
@@ -367,74 +763,33 @@ export default function AdminActivites() {
               <p>{types.length === 0 ? 'Crée d\'abord un type dans l\'onglet "Types".' : "Aucune activité. Crée la première !"}</p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {filteredActivities.map((a) => {
-                const tInfo = typeRecord[a.type || ""];
-                const spotsLeft = a.max_spots > 0 ? a.max_spots - (a.spots_taken || 0) : null;
-                const nights = a.type === "weekend" ? getNightCount(a.delivery_date || "", a.end_date || "") : null;
-                return (
-                  <div key={a.id} className="flex items-center gap-4 rounded-xl border border-border bg-card p-4">
-                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 text-primary overflow-hidden">
-                      {a.cover_image_url
-                        ? <img src={a.cover_image_url} alt="" className="w-full h-full object-cover" />
-                        : tInfo ? <ActivityIcon iconName={tInfo.icon_name} emoji={tInfo.emoji} className="h-6 w-6" /> : <Calendar className="h-6 w-6" />
-                      }
-                    </div>
+            <div className="space-y-6">
+              {/* Upcoming */}
+              {upcoming.length > 0 && (
+                <div className="space-y-3">
+                  {upcoming.map((a) => renderActivityCard(a, false))}
+                </div>
+              )}
 
-                    <div className="flex-1 min-w-0 space-y-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-semibold text-foreground truncate">{a.title}</h3>
-                        {tInfo && (
-                          <Badge variant="secondary" className="text-xs shrink-0">
-                            {tInfo.label}
-                          </Badge>
-                        )}
-                        <Badge className={cn("text-xs shrink-0", a.status === "active" ? "bg-green-500/15 text-green-500" : "bg-muted text-muted-foreground")}>
-                          {a.status === "active" ? "Actif" : "Brouillon"}
-                        </Badge>
-                      </div>
-                      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-                        {a.delivery_date && (
-                          <span className="flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
-                            {new Date(a.delivery_date).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}
-                            {a.end_date && ` → ${new Date(a.end_date).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}`}
-                            {nights && ` · ${nights} nuit${nights > 1 ? "s" : ""}`}
-                            {a.event_time && ` à ${a.event_time}`}
-                          </span>
-                        )}
-                        {a.venue && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {a.venue}</span>}
-                        {spotsLeft !== null && <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {spotsLeft} place{spotsLeft > 1 ? "s" : ""}</span>}
-                        <span className="flex items-center gap-1 font-semibold text-primary">
-                          <Tag className="h-3 w-3" />
-                          {a.price > 0 ? `${a.price.toLocaleString("fr-FR")} ${a.currency || "FCFA"}` : "Gratuit"}
-                        </span>
-                      </div>
-                      {/* Weekend extras */}
-                      {a.type === "weekend" && a.extra_config && (
-                        <div className="flex gap-2 flex-wrap">
-                          {(a.extra_config as any).accommodation_included && <Badge variant="outline" className="text-xs gap-1"><TreePine className="h-2.5 w-2.5" /> Hébergement</Badge>}
-                          {(a.extra_config as any).meals_included && <Badge variant="outline" className="text-xs gap-1"><Utensils className="h-2.5 w-2.5" /> Repas</Badge>}
-                          {(a.extra_config as any).transport_included && <Badge variant="outline" className="text-xs gap-1"><Rocket className="h-2.5 w-2.5" /> Transport</Badge>}
-                        </div>
-                      )}
-                      {/* Diner extras */}
-                      {a.type === "diner" && a.extra_config && (a.extra_config as any).dress_code && (
-                        <Badge variant="outline" className="text-xs gap-1">
-                          <Shirt className="h-2.5 w-2.5" />
-                          {DRESS_CODES.find(d => d.value === (a.extra_config as any).dress_code)?.label || (a.extra_config as any).dress_code}
-                        </Badge>
-                      )}
+              {/* Past — collapsible */}
+              {past.length > 0 && (
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowPast((v) => !v)}
+                    className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors group"
+                  >
+                    <ChevronDown className={cn("h-4 w-4 transition-transform", showPast ? "rotate-0" : "-rotate-90")} />
+                    <span className="font-medium">Activités passées</span>
+                    <Badge variant="secondary" className="text-xs">{past.length}</Badge>
+                  </button>
+                  {showPast && (
+                    <div className="space-y-3 pl-4 border-l-2 border-border/50">
+                      {past.map((a) => renderActivityCard(a, true))}
                     </div>
-
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Switch checked={a.status === "active"} onCheckedChange={() => toggleStatus(a)} />
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(a)}><Edit className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10" onClick={() => handleDelete(a.id)}><Trash2 className="h-4 w-4" /></Button>
-                    </div>
-                  </div>
-                );
-              })}
+                  )}
+                </div>
+              )}
             </div>
           )}
         </TabsContent>
@@ -534,159 +889,167 @@ export default function AdminActivites() {
               <Textarea value={form.description} onChange={(e) => setField("description", e.target.value)} rows={3} />
             </div>
 
-            {/* Prix + Devise */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Prix</Label>
-                <Input type="number" value={form.price} onChange={(e) => setField("price", e.target.value)} min={0} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Devise</Label>
-                <Input value={form.currency} onChange={(e) => setField("currency", e.target.value)} placeholder="FCFA" />
-              </div>
-            </div>
-
-            {/* ── Dates : Weeked = start + end, autres = date seule ── */}
-            {form.type === "weekend" ? (
-              <div className="space-y-3 rounded-xl border border-green-500/20 bg-green-500/5 p-4">
-                <p className="text-sm font-semibold text-foreground flex items-center gap-2">
-                  <TreePine className="h-4 w-4 text-green-500" /> Week-end Détox — Dates & séjour
-                </p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label>Date d'arrivée</Label>
-                    <Input type="date" value={form.delivery_date} onChange={(e) => setField("delivery_date", e.target.value)} />
-                    <p className="text-xs text-muted-foreground">Ex: vendredi soir</p>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Date de départ</Label>
-                    <Input type="date" value={form.end_date} onChange={(e) => setField("end_date", e.target.value)} />
-                    <p className="text-xs text-muted-foreground">Ex: dimanche après-midi</p>
-                  </div>
-                </div>
-                {form.delivery_date && form.end_date && (() => {
-                  const n = getNightCount(form.delivery_date, form.end_date);
-                  return n && n > 0 ? (
-                    <p className="text-xs text-green-600 dark:text-green-400 font-medium">
-                      ✓ {n} nuit{n > 1 ? "s" : ""} · {n + 1} jour{n + 1 > 1 ? "s" : ""}
-                    </p>
-                  ) : null;
-                })()}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label>Heure d'arrivée</Label>
-                    <Input type="time" value={form.event_time} onChange={(e) => setField("event_time", e.target.value)} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Heure de départ</Label>
-                    <Input type="time" value={form.extra_config.departure_time || ""} onChange={(e) => setExtra("departure_time", e.target.value)} />
-                  </div>
-                </div>
-                {/* Lieu */}
-                <div className="space-y-1.5">
-                  <Label>Lieu (nom du domaine / centre)</Label>
-                  <Input value={form.venue} onChange={(e) => setField("venue", e.target.value)} placeholder="Domaine de Keur Moussa" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Adresse complète</Label>
-                  <Input value={form.extra_config.address || ""} onChange={(e) => setExtra("address", e.target.value)} placeholder="Route de Kayar, 40 km de Dakar" />
-                </div>
-                {/* Ce qui est inclus */}
-                <div className="space-y-2">
-                  <Label>Inclus dans le prix</Label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { key: "accommodation_included", icon: <TreePine className="h-4 w-4" />, label: "Hébergement" },
-                      { key: "meals_included", icon: <Utensils className="h-4 w-4" />, label: "Repas" },
-                      { key: "transport_included", icon: <Rocket className="h-4 w-4" />, label: "Transport" },
-                    ].map(({ key, icon, label }) => (
-                      <label key={key} className={cn(
-                        "flex flex-col items-center gap-1.5 rounded-xl border p-3 cursor-pointer transition-all text-xs font-medium",
-                        form.extra_config[key] ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/40"
-                      )}>
-                        <input type="checkbox" className="sr-only" checked={!!form.extra_config[key]} onChange={(e) => setExtra(key, e.target.checked)} />
-                        {icon}
-                        {label}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-                {/* Programme */}
-                <div className="space-y-1.5">
-                  <Label>Programme détaillé</Label>
-                  <Textarea
-                    value={form.extra_config.programme || ""}
-                    onChange={(e) => setExtra("programme", e.target.value)}
-                    rows={5}
-                    placeholder={"Vendredi soir\n18h00 — Arrivée et installation\n19h30 — Dîner de bienvenue\n\nSamedi\n08h00 — Petit-déjeuner\n09h00 — Session méditation…\n\nDimanche\n..."}
-                  />
-                </div>
-              </div>
+            {/* ── Coaching section ── */}
+            {form.type === "coaching" ? (
+              <CoachingSection
+                extra={form.extra_config}
+                currency={form.currency}
+                onChange={setExtra}
+              />
             ) : (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label>Date</Label>
-                  <Input type="date" value={form.delivery_date} onChange={(e) => setField("delivery_date", e.target.value)} />
+              <>
+                {/* Prix + Devise */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Prix</Label>
+                    <Input type="number" value={form.price} onChange={(e) => setField("price", e.target.value)} min={0} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Devise</Label>
+                    <Input value={form.currency} onChange={(e) => setField("currency", e.target.value)} placeholder="FCFA" />
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <Label>Heure</Label>
-                  <Input type="time" value={form.event_time} onChange={(e) => setField("event_time", e.target.value)} />
-                </div>
-              </div>
+
+                {/* ── Dates : Weekend = start + end, autres = date seule ── */}
+                {form.type === "weekend" ? (
+                  <div className="space-y-3 rounded-xl border border-green-500/20 bg-green-500/5 p-4">
+                    <p className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <TreePine className="h-4 w-4 text-green-500" /> Week-end Détox — Dates &amp; séjour
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label>Date d'arrivée</Label>
+                        <Input type="date" value={form.delivery_date} onChange={(e) => setField("delivery_date", e.target.value)} />
+                        <p className="text-xs text-muted-foreground">Ex: vendredi soir</p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Date de départ</Label>
+                        <Input type="date" value={form.end_date} onChange={(e) => setField("end_date", e.target.value)} />
+                        <p className="text-xs text-muted-foreground">Ex: dimanche après-midi</p>
+                      </div>
+                    </div>
+                    {form.delivery_date && form.end_date && (() => {
+                      const n = getNightCount(form.delivery_date, form.end_date);
+                      return n && n > 0 ? (
+                        <p className="text-xs text-green-600 dark:text-green-400 font-medium">
+                          ✓ {n} nuit{n > 1 ? "s" : ""} · {n + 1} jour{n + 1 > 1 ? "s" : ""}
+                        </p>
+                      ) : null;
+                    })()}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label>Heure d'arrivée</Label>
+                        <Input type="time" value={form.event_time} onChange={(e) => setField("event_time", e.target.value)} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Heure de départ</Label>
+                        <Input type="time" value={form.extra_config.departure_time || ""} onChange={(e) => setExtra("departure_time", e.target.value)} />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Lieu (nom du domaine / centre)</Label>
+                      <Input value={form.venue} onChange={(e) => setField("venue", e.target.value)} placeholder="Domaine de Keur Moussa" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Adresse complète</Label>
+                      <Input value={form.extra_config.address || ""} onChange={(e) => setExtra("address", e.target.value)} placeholder="Route de Kayar, 40 km de Dakar" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Inclus dans le prix</Label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[
+                          { key: "accommodation_included", icon: <TreePine className="h-4 w-4" />, label: "Hébergement" },
+                          { key: "meals_included", icon: <Utensils className="h-4 w-4" />, label: "Repas" },
+                          { key: "transport_included", icon: <Rocket className="h-4 w-4" />, label: "Transport" },
+                        ].map(({ key, icon, label }) => (
+                          <label key={key} className={cn(
+                            "flex flex-col items-center gap-1.5 rounded-xl border p-3 cursor-pointer transition-all text-xs font-medium",
+                            form.extra_config[key] ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/40"
+                          )}>
+                            <input type="checkbox" className="sr-only" checked={!!form.extra_config[key]} onChange={(e) => setExtra(key, e.target.checked)} />
+                            {icon}
+                            {label}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Programme détaillé</Label>
+                      <Textarea
+                        value={form.extra_config.programme || ""}
+                        onChange={(e) => setExtra("programme", e.target.value)}
+                        rows={5}
+                        placeholder={"Vendredi soir\n18h00 — Arrivée et installation\n19h30 — Dîner de bienvenue\n\nSamedi\n08h00 — Petit-déjeuner\n09h00 — Session méditation…"}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label>Date</Label>
+                      <Input type="date" value={form.delivery_date} onChange={(e) => setField("delivery_date", e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Heure</Label>
+                      <Input type="time" value={form.event_time} onChange={(e) => setField("event_time", e.target.value)} />
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Dîner avec le mentor ── */}
+                {form.type === "diner" && (
+                  <div className="space-y-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+                    <p className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <Utensils className="h-4 w-4 text-amber-500" /> Détails du dîner
+                    </p>
+                    <div className="space-y-1.5">
+                      <Label>Nom du restaurant</Label>
+                      <Input value={form.venue} onChange={(e) => setField("venue", e.target.value)} placeholder="Restaurant La Teranga" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Adresse</Label>
+                      <Input value={form.extra_config.address || ""} onChange={(e) => setExtra("address", e.target.value)} placeholder="23 Avenue Léopold Sédar Senghor, Dakar" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Dress code</Label>
+                      <Select value={form.extra_config.dress_code || ""} onValueChange={(v) => setExtra("dress_code", v)}>
+                        <SelectTrigger><SelectValue placeholder="Aucun dress code" /></SelectTrigger>
+                        <SelectContent>
+                          {DRESS_CODES.map((d) => (
+                            <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Menu / Carte</Label>
+                      <Textarea
+                        value={form.extra_config.menu || ""}
+                        onChange={(e) => setExtra("menu", e.target.value)}
+                        rows={4}
+                        placeholder={"Menu 3 services :\n— Entrée : ...\n— Plat : ...\n— Dessert : ..."}
+                      />
+                    </div>
+                    <label className={cn(
+                      "flex items-center gap-3 rounded-xl border p-3 cursor-pointer transition-all",
+                      form.extra_config.drinks_included ? "border-primary bg-primary/10" : "border-border hover:border-primary/40"
+                    )}>
+                      <input type="checkbox" className="sr-only" checked={!!form.extra_config.drinks_included} onChange={(e) => setExtra("drinks_included", e.target.checked)} />
+                      <Wine className="h-4 w-4 text-amber-500 shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium text-foreground">Boissons incluses</p>
+                        <p className="text-xs text-muted-foreground">Eau, soft, vin (selon formule)</p>
+                      </div>
+                      <div className={cn("ml-auto h-4 w-4 rounded border-2 flex items-center justify-center", form.extra_config.drinks_included ? "border-primary bg-primary" : "border-muted-foreground")}>
+                        {form.extra_config.drinks_included && <Check className="h-2.5 w-2.5 text-white" />}
+                      </div>
+                    </label>
+                  </div>
+                )}
+              </>
             )}
 
-            {/* ── Dîner avec le mentor ── */}
-            {form.type === "diner" && (
-              <div className="space-y-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
-                <p className="text-sm font-semibold text-foreground flex items-center gap-2">
-                  <Utensils className="h-4 w-4 text-amber-500" /> Détails du dîner
-                </p>
-                <div className="space-y-1.5">
-                  <Label>Nom du restaurant</Label>
-                  <Input value={form.venue} onChange={(e) => setField("venue", e.target.value)} placeholder="Restaurant La Teranga" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Adresse</Label>
-                  <Input value={form.extra_config.address || ""} onChange={(e) => setExtra("address", e.target.value)} placeholder="23 Avenue Léopold Sédar Senghor, Dakar" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Dress code</Label>
-                  <Select value={form.extra_config.dress_code || ""} onValueChange={(v) => setExtra("dress_code", v)}>
-                    <SelectTrigger><SelectValue placeholder="Aucun dress code" /></SelectTrigger>
-                    <SelectContent>
-                      {DRESS_CODES.map((d) => (
-                        <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Menu / Carte</Label>
-                  <Textarea
-                    value={form.extra_config.menu || ""}
-                    onChange={(e) => setExtra("menu", e.target.value)}
-                    rows={4}
-                    placeholder={"Menu 3 services :\n— Entrée : ...\n— Plat : ...\n— Dessert : ..."}
-                  />
-                </div>
-                <label className={cn(
-                  "flex items-center gap-3 rounded-xl border p-3 cursor-pointer transition-all",
-                  form.extra_config.drinks_included ? "border-primary bg-primary/10" : "border-border hover:border-primary/40"
-                )}>
-                  <input type="checkbox" className="sr-only" checked={!!form.extra_config.drinks_included} onChange={(e) => setExtra("drinks_included", e.target.checked)} />
-                  <Wine className="h-4 w-4 text-amber-500 shrink-0" />
-                  <div>
-                    <p className="text-sm font-medium text-foreground">Boissons incluses</p>
-                    <p className="text-xs text-muted-foreground">Eau, soft, vin (selon formule)</p>
-                  </div>
-                  <div className={cn("ml-auto h-4 w-4 rounded border-2 flex items-center justify-center", form.extra_config.drinks_included ? "border-primary bg-primary" : "border-muted-foreground")}>
-                    {form.extra_config.drinks_included && <Check className="h-2.5 w-2.5 text-white" />}
-                  </div>
-                </label>
-              </div>
-            )}
-
-            {/* ── Format (pour les non-weekend non-diner) ── */}
+            {/* ── Format (présentiel / en ligne / hybride) ── */}
             {form.type !== "weekend" && (
               <>
                 <div className="space-y-1.5">
@@ -700,7 +1063,6 @@ export default function AdminActivites() {
                     </SelectContent>
                   </Select>
                 </div>
-
                 {form.attendance_mode !== "online" && form.type !== "diner" && (
                   <div className="space-y-1.5">
                     <Label>Lieu / adresse</Label>
@@ -754,7 +1116,6 @@ export default function AdminActivites() {
             <DialogTitle>{editingType ? "Modifier le type" : "Nouveau type d'activité"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            {/* Nom */}
             <div className="space-y-1.5">
               <Label>Nom affiché *</Label>
               <Input
@@ -770,7 +1131,6 @@ export default function AdminActivites() {
               />
             </div>
 
-            {/* Clé slug */}
             {!editingType && (
               <div className="space-y-1.5">
                 <Label>Clé technique</Label>
@@ -778,19 +1138,16 @@ export default function AdminActivites() {
               </div>
             )}
 
-            {/* Ordre */}
             <div className="space-y-1.5">
               <Label>Ordre d'affichage</Label>
               <Input type="number" value={typeForm.sort_order} onChange={(e) => setTypeForm((p) => ({ ...p, sort_order: Number(e.target.value) }))} min={0} />
             </div>
 
-            {/* Sélecteur d'icône */}
             <div className="space-y-1.5">
               <Label>Icône *</Label>
               <IconPicker value={typeForm.icon_name} onChange={(name) => setTypeForm((p) => ({ ...p, icon_name: name }))} />
             </div>
 
-            {/* Préview */}
             {(typeForm.label || typeForm.icon_name) && (
               <div className="rounded-xl border border-border bg-muted/20 p-3 flex items-center gap-3">
                 <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
