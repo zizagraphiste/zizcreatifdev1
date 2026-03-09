@@ -12,6 +12,7 @@ import {
   UserCheck, Users, ImageOff, Share2, Copy, Check,
 } from "lucide-react";
 import { GuestCheckoutDialog } from "@/components/GuestCheckoutDialog";
+import { DURATION_PRESETS } from "@/components/admin/AdminActivites";
 
 type Product = {
   id: string;
@@ -32,6 +33,7 @@ type Product = {
   delivery_date: string | null;
   date_mode: string | null;
   delivery_mode: string | null;
+  extra_config: Record<string, any> | null;
 };
 
 type Module = {
@@ -70,7 +72,7 @@ export default function ProductPage() {
     (async () => {
       const query = supabase
         .from("products")
-        .select("id, title, description, thumbnail_emoji, cover_image_url, price, currency, max_spots, spots_taken, status, type, attendance_mode, venue, online_link, event_time, delivery_date, date_mode, delivery_mode");
+        .select("id, title, description, thumbnail_emoji, cover_image_url, price, currency, max_spots, spots_taken, status, type, attendance_mode, venue, online_link, event_time, delivery_date, date_mode, delivery_mode, extra_config");
 
       const { data: p } = await (isUUID(identifier)
         ? query.eq("id", identifier).single()
@@ -223,14 +225,34 @@ export default function ProductPage() {
           transition={{ delay: 0.1 }}
           className="grid grid-cols-2 sm:grid-cols-4 gap-3"
         >
-          {/* Prix */}
-          <div className="rounded-xl border border-border bg-card p-4 text-center">
-            <p className="text-xs text-muted-foreground mb-1">Prix</p>
-            <p className="text-xl font-black text-primary">
-              {isFree ? "Gratuit" : `${product.price.toLocaleString("fr-FR")}`}
-            </p>
-            {!isFree && <p className="text-xs text-muted-foreground">{product.currency || "FCFA"}</p>}
-          </div>
+          {/* Prix — coaching : tableau des durées, sinon prix fixe */}
+          {product.type === "coaching" && product.extra_config?.durations ? (
+            <div className="col-span-2 sm:col-span-4 rounded-xl border border-border bg-card p-4">
+              <p className="text-xs text-muted-foreground mb-3 font-medium">Tarifs par durée</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {DURATION_PRESETS.filter((p) => {
+                  const d = (product.extra_config!.durations as Record<string, { enabled: boolean; price: number }>)[p.minutes];
+                  return d?.enabled;
+                }).map((p) => {
+                  const d = (product.extra_config!.durations as Record<string, { enabled: boolean; price: number }>)[p.minutes];
+                  return (
+                    <div key={p.minutes} className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
+                      <span className="font-medium text-foreground">{p.label}</span>
+                      <span className="font-black text-primary">{d.price.toLocaleString("fr-FR")} <span className="text-xs font-normal text-muted-foreground">{product.currency || "FCFA"}</span></span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-border bg-card p-4 text-center">
+              <p className="text-xs text-muted-foreground mb-1">Prix</p>
+              <p className="text-xl font-black text-primary">
+                {isFree ? "Gratuit" : `${product.price.toLocaleString("fr-FR")}`}
+              </p>
+              {!isFree && <p className="text-xs text-muted-foreground">{product.currency || "FCFA"}</p>}
+            </div>
+          )}
 
           {/* Places */}
           {!unlimited && (
@@ -375,7 +397,12 @@ export default function ProductPage() {
               {isClosed ? "Formation complète" : isFormation ? "Réserve ta place" : "Accède au contenu"}
             </p>
             <span className="text-3xl font-black text-primary">
-              {isFree ? "Gratuit" : `${product.price.toLocaleString("fr-FR")} ${product.currency || "FCFA"}`}
+              {isFree ? "Gratuit" : (
+                <>
+                  {product.type === "coaching" && <span className="text-sm font-normal text-muted-foreground block mb-0.5">À partir de</span>}
+                  {product.price.toLocaleString("fr-FR")} {product.currency || "FCFA"}
+                </>
+              )}
             </span>
           </div>
           {isFree ? (

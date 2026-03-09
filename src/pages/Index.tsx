@@ -641,7 +641,14 @@ function ActivityCard({ product, index, typeMap }: { product: Product; index: nu
           </div>
         )}
         <div className="mt-auto pt-3 border-t border-border flex items-center justify-between">
-          <span className="text-2xl font-black text-primary">{product.price === 0 ? "Gratuit" : `${product.price.toLocaleString("fr-FR")} ${product.currency || "FCFA"}`}</span>
+          <span className="text-2xl font-black text-primary">
+            {product.price === 0 ? "Gratuit" : (
+              <>
+                {product.type === "coaching" && <span className="text-sm font-normal text-muted-foreground mr-1">À partir de</span>}
+                {product.price.toLocaleString("fr-FR")} {product.currency || "FCFA"}
+              </>
+            )}
+          </span>
           <Button size="sm" className={isClosed ? "bg-muted text-muted-foreground" : "bg-primary text-primary-foreground hover:bg-primary/90 font-semibold gap-1"}
             onClick={(e) => { e.stopPropagation(); navigate(`/product/${product.id}`); }}>
             {isClosed ? "Complet" : <> S'inscrire <ArrowRight className="h-4 w-4" /></>}

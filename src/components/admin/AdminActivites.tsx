@@ -25,7 +25,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 /* ═══════════════ COACHING CONSTANTS ═══════════════ */
-const DURATION_PRESETS = [
+export const DURATION_PRESETS = [
   { minutes: 30, label: "30 min" },
   { minutes: 45, label: "45 min" },
   { minutes: 60, label: "1 h" },
@@ -485,11 +485,20 @@ export default function AdminActivites() {
 
     const isCoaching = form.type === "coaching";
 
+    // Pour coaching : prix = minimum des durées actives (pour affichage "à partir de")
+    const coachingMinPrice = isCoaching && form.extra_config.durations
+      ? Math.min(
+          ...Object.values(form.extra_config.durations as Record<string, { enabled: boolean; price: number }>)
+            .filter((d) => d.enabled)
+            .map((d) => d.price)
+        ) || 0
+      : 0;
+
     const payload: any = {
       title: form.title.trim(),
       description: form.description.trim() || null,
       type: form.type,
-      price: isCoaching ? 0 : (Number(form.price) || 0),
+      price: isCoaching ? coachingMinPrice : (Number(form.price) || 0),
       currency: form.currency || "FCFA",
       delivery_date: isCoaching ? null : (form.delivery_date || null),
       end_date: form.type === "weekend" ? (form.end_date || null) : null,
