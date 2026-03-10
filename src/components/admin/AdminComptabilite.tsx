@@ -52,24 +52,25 @@ export default function AdminComptabilite() {
 
     const { data: regs } = await supabase
       .from("registrations")
-      .select("id, full_name, email, status, created_at, confirmed_at, product_id")
+      .select("id, full_name, email, status, created_at, confirmed_at, product_id, amount")
       .in("status", ["confirmed", "paid"])
       .order("created_at", { ascending: false });
 
     if (regs && regs.length > 0) {
-      const pids = [...new Set(regs.map((r: any) => r.product_id))];
-      const { data: prods } = await supabase
-        .from("products")
-        .select("id, title, price, currency")
-        .in("id", pids);
-      const prodMap = Object.fromEntries(
-        (prods || []).map((p: any) => [p.id, p])
-      );
+      const pids = [...new Set((regs as any[]).map((r: any) => r.product_id).filter(Boolean))];
+      const prodMap: Record<string, any> = {};
+      if (pids.length > 0) {
+        const { data: prods } = await supabase
+          .from("products")
+          .select("id, title, currency")
+          .in("id", pids);
+        (prods || []).forEach((p: any) => { prodMap[p.id] = p; });
+      }
       setTransactions(
-        regs.map((r: any) => ({
+        (regs as any[]).map((r: any) => ({
           ...r,
           product_title: prodMap[r.product_id]?.title || "—",
-          product_price: prodMap[r.product_id]?.price || 0,
+          product_price: r.amount ?? 0,
           product_currency: prodMap[r.product_id]?.currency || "FCFA",
         }))
       );

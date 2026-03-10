@@ -2,10 +2,12 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { CheckCircle, XCircle, Phone, Clock } from "lucide-react";
+import { CheckCircle, XCircle, Phone, Clock, UserRound, Mail, MessageCircle, CalendarDays, ShoppingBag, Ban, CalendarClock } from "lucide-react";
 import { toast } from "sonner";
+import { differenceInMonths } from "date-fns";
 
 type Registration = {
   id: string;
@@ -20,10 +22,13 @@ type Registration = {
   product_id: string;
   user_id: string | null;
   product_title: string;
+  product_type: string;
   product_delivery_mode: string;
   product_delivery_date: string | null;
   product_price: number;
   product_currency: string;
+  session_date: string | null;
+  session_time: string | null;
 };
 
 type Product = {
@@ -43,6 +48,16 @@ export default function AdminRegistrations() {
   const [proofUrl, setProofUrl] = useState<string | null>(null);
   const [proofRegId, setProofRegId] = useState<string | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  // Fiche contact
+  const [contactInfo, setContactInfo] = useState<any | null>(null);
+  const [contactLoading, setContactLoading] = useState(false);
+  // Révocation
+  const [revokeTarget, setRevokeTarget] = useState<Registration | null>(null);
+  const [revokeReason, setRevokeReason] = useState("");
+  // Reprogrammation coaching
+  const [rescheduleTarget, setRescheduleTarget] = useState<Registration | null>(null);
+  const [rescheduleDate, setRescheduleDate] = useState("");
+  const [rescheduleTime, setRescheduleTime] = useState("");
 
   useEffect(() => { fetchData(); }, []);
 
@@ -50,7 +65,7 @@ export default function AdminRegistrations() {
     setLoading(true);
     const [{ data: regs }, { data: prods }] = await Promise.all([
       supabase.from("registrations").select("*").order("created_at", { ascending: false }),
-      supabase.from("products").select("id, title, delivery_mode, delivery_date, price, currency"),
+      supabase.from("products").select("id, title, type, delivery_mode, delivery_date, price, currency"),
     ]);
 
     const prodMap = Object.fromEntries((prods || []).map((p: any) => [p.id, p]));
@@ -59,9 +74,10 @@ export default function AdminRegistrations() {
       ((regs as any[]) || []).map((r: any) => ({
         ...r,
         product_title: prodMap[r.product_id]?.title || "—",
+        product_type: prodMap[r.product_id]?.type || "",
         product_delivery_mode: prodMap[r.product_id]?.delivery_mode || "auto",
         product_delivery_date: prodMap[r.product_id]?.delivery_date || null,
-        product_price: prodMap[r.product_id]?.price || 0,
+        product_price: r.amount ?? prodMap[r.product_id]?.price ?? 0,
         product_currency: prodMap[r.product_id]?.currency || "FCFA",
       }))
     );
@@ -76,7 +92,6 @@ export default function AdminRegistrations() {
       .eq("id", reg.id);
     if (regError) { toast.error(regError.message); setProcessingId(null); return; }
 
-    // Create access grant (only if user has an account)
     if (reg.user_id) {
       const availableAt = reg.product_delivery_mode === "scheduled" && reg.product_delivery_date
         ? reg.product_delivery_date
@@ -111,6 +126,115 @@ export default function AdminRegistrations() {
     fetchData();
   };
 
+  const openContact = async (reg: Registration) => {
+    setContactLoading(true);
+    setContactInfo({ loading: true, reg });
+
+    const [profileRes, mentorRes, regsRes] = await Promise.all([
+      reg.user_id
+        ? supabase.from("profiles").select("full_name, email, phone, avatar_url, created_at").eq("id", reg.user_id).single()
+        : Promise.resolve({ data: null }),
+      reg.user_id
+        ? supabase.from("mentor_messages").select("id", { count: "exact" }).eq("user_id", reg.user_id)
+        : Promise.resolve({ data: null, count: 0 }),
+      supabase.from("registrations").select("id, status, product_id").eq("email", reg.email),
+    ]);
+
+    const profile = profileRes.data as any;
+    const msgCount = (mentorRes as any).count ?? 0;
+    const memberSince = profile?.created_at ? new Date(profile.created_at) : new Date(reg.created_at);
+    const months = differenceInMonths(new Date(), memberSince);
+    const totalCredits = (months + 1) * 4;
+    const creditsLeft = Math.max(0, totalCredits - msgCount);
+
+    const allRegs = (regsRes.data as any[]) || [];
+    const confirmedCount = allRegs.filter(r => r.status === "confirmed").length;
+
+    setContactInfo({
+      reg,
+      profile,
+      msgCount,
+      creditsLeft,
+      totalInscriptions: allRegs.length,
+      confirmedInscriptions: confirmedCount,
+      memberSince,
+    });
+    setContactLoading(false);
+  };
+
+  const revokeRegistration = async () => {
+    if (!revokeTarget) return;
+    setProcessingId(revokeTarget.id);
+
+    const { error } = await supabase
+      .from("registrations")
+      .update({ status: "revoked" } as any)
+      .eq("id", revokeTarget.id);
+    if (error) { toast.error(error.message); setProcessingId(null); return; }
+
+    // Remove access grant if exists
+    if (revokeTarget.user_id) {
+      await supabase
+        .from("access_grants")
+        .delete()
+        .eq("user_id", revokeTarget.user_id)
+        .eq("product_id", revokeTarget.product_id);
+    }
+
+    // Send revocation email via Resend if reason provided
+    if (revokeReason.trim()) {
+      await supabase.functions.invoke("send-email", {
+        body: {
+          to: revokeTarget.email,
+          subject: `Votre inscription a été révoquée — ${revokeTarget.product_title}`,
+          html: `<p>Bonjour ${revokeTarget.full_name},</p>
+<p>Votre inscription à <strong>${revokeTarget.product_title}</strong> a été révoquée.</p>
+${revokeReason ? `<p><strong>Motif :</strong> ${revokeReason}</p>` : ""}
+<p>Pour toute question, répondez à cet email.</p>
+<p>Cordialement,<br/>L'équipe ZizCreatif</p>`,
+        },
+      });
+    }
+
+    toast.success("Inscription révoquée");
+    setRevokeTarget(null);
+    setRevokeReason("");
+    setProcessingId(null);
+    fetchData();
+  };
+
+  const rescheduleSession = async () => {
+    if (!rescheduleTarget || !rescheduleDate || !rescheduleTime) return;
+    setProcessingId(rescheduleTarget.id);
+
+    const { error } = await supabase
+      .from("registrations")
+      .update({ session_date: rescheduleDate, session_time: rescheduleTime } as any)
+      .eq("id", rescheduleTarget.id);
+    if (error) { toast.error(error.message); setProcessingId(null); return; }
+
+    // Email notification to client
+    const dateLabel = new Date(rescheduleDate).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    await supabase.functions.invoke("send-email", {
+      body: {
+        to: rescheduleTarget.email,
+        subject: `Votre séance a été reprogrammée — ${rescheduleTarget.product_title}`,
+        html: `<p>Bonjour ${rescheduleTarget.full_name},</p>
+<p>Votre séance de coaching <strong>${rescheduleTarget.product_title}</strong> a été reprogrammée.</p>
+<p><strong>Nouvelle date :</strong> ${dateLabel} à ${rescheduleTime}</p>
+<p>Si vous avez des questions, répondez à cet email.</p>
+<p>À bientôt,<br/>L'équipe ZizCreatif</p>`,
+      },
+    });
+
+    toast.success("✅ Séance reprogrammée et client notifié !");
+    setRescheduleTarget(null);
+    setRescheduleDate("");
+    setRescheduleTime("");
+    setProcessingId(null);
+    fetchData();
+  };
+
   const filtered = registrations.filter((r) => {
     if (filterProduct !== "all" && r.product_id !== filterProduct) return false;
     if (filterStatus !== "all" && r.status !== filterStatus) return false;
@@ -129,10 +253,11 @@ export default function AdminRegistrations() {
 
   const statusBadge = (status: string) => {
     const map: Record<string, { bg: string; label: string }> = {
-      pending: { bg: "bg-muted text-muted-foreground", label: "En attente" },
-      paid:    { bg: "bg-orange-500/15 text-orange-500", label: "🔔 À valider" },
+      pending:   { bg: "bg-muted text-muted-foreground", label: "En attente" },
+      paid:      { bg: "bg-orange-500/15 text-orange-500", label: "🔔 À valider" },
       confirmed: { bg: "bg-green-500/15 text-green-500", label: "Confirmé" },
       rejected:  { bg: "bg-destructive/15 text-destructive", label: "Rejeté" },
+      revoked:   { bg: "bg-purple-500/15 text-purple-500", label: "Révoqué" },
     };
     const s = map[status] || map.pending;
     return <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${s.bg}`}>{s.label}</span>;
@@ -169,6 +294,7 @@ export default function AdminRegistrations() {
             <SelectItem value="paid">À valider</SelectItem>
             <SelectItem value="confirmed">Confirmé</SelectItem>
             <SelectItem value="rejected">Rejeté</SelectItem>
+            <SelectItem value="revoked">Révoqué</SelectItem>
           </SelectContent>
         </Select>
         <Input
@@ -200,7 +326,7 @@ export default function AdminRegistrations() {
             ) : filtered.map((r) => (
               <tr
                 key={r.id}
-                className={`border-b border-border last:border-0 ${r.status === "paid" ? "bg-orange-500/5" : ""}`}
+                className={`border-b border-border last:border-0 ${r.status === "paid" ? "bg-orange-500/5" : ""} ${r.status === "revoked" ? "opacity-60" : ""}`}
               >
                 {/* Client */}
                 <td className="px-4 py-3">
@@ -234,6 +360,17 @@ export default function AdminRegistrations() {
                 {/* Actions */}
                 <td className="px-4 py-3">
                   <div className="flex items-center justify-end gap-2">
+                    {/* Fiche contact */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => openContact(r)}
+                      className="text-muted-foreground hover:text-foreground p-1.5"
+                      title="Fiche contact"
+                    >
+                      <UserRound className="h-4 w-4" />
+                    </Button>
+
                     {/* Show proof if exists */}
                     {r.payment_screenshot_url && (
                       <Button
@@ -245,7 +382,8 @@ export default function AdminRegistrations() {
                         Preuve
                       </Button>
                     )}
-                    {/* Validate button for "paid" status */}
+
+                    {/* Validate buttons for "paid" status */}
                     {r.status === "paid" && (
                       <>
                         <Button
@@ -269,6 +407,7 @@ export default function AdminRegistrations() {
                         </Button>
                       </>
                     )}
+
                     {/* Manual confirm for pending */}
                     {r.status === "pending" && (
                       <Button
@@ -281,6 +420,38 @@ export default function AdminRegistrations() {
                         {processingId === r.id ? "…" : "Confirmer"}
                       </Button>
                     )}
+
+                    {/* Reschedule button for confirmed coaching */}
+                    {r.status === "confirmed" && r.product_type === "coaching" && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={processingId === r.id}
+                        onClick={() => {
+                          setRescheduleTarget(r);
+                          setRescheduleDate(r.session_date || "");
+                          setRescheduleTime(r.session_time || "");
+                        }}
+                        className="text-blue-500 hover:text-blue-700 hover:bg-blue-500/10 p-1.5"
+                        title="Reprogrammer la séance"
+                      >
+                        <CalendarClock className="h-4 w-4" />
+                      </Button>
+                    )}
+
+                    {/* Revoke button for confirmed */}
+                    {r.status === "confirmed" && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={processingId === r.id}
+                        onClick={() => { setRevokeTarget(r); setRevokeReason(""); }}
+                        className="text-purple-500 hover:text-purple-700 hover:bg-purple-500/10 p-1.5"
+                        title="Révoquer l'accès"
+                      >
+                        <Ban className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -289,7 +460,7 @@ export default function AdminRegistrations() {
         </table>
       </div>
 
-      {/* Proof Modal (backward compat) */}
+      {/* Proof Modal */}
       <Dialog open={!!proofUrl} onOpenChange={() => { setProofUrl(null); setProofRegId(null); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>Preuve de paiement</DialogTitle></DialogHeader>
@@ -316,6 +487,194 @@ export default function AdminRegistrations() {
               >
                 Confirmer ✓
               </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Fiche contact Dialog */}
+      <Dialog open={!!contactInfo} onOpenChange={() => setContactInfo(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserRound className="h-5 w-5 text-primary" />
+              Fiche contact
+            </DialogTitle>
+          </DialogHeader>
+          {contactInfo && !contactInfo.loading && (
+            <div className="space-y-4 pt-1">
+              {/* Name */}
+              <div>
+                <p className="text-lg font-semibold text-foreground">{contactInfo.reg.full_name}</p>
+                <p className="text-xs text-muted-foreground">
+                  Membre depuis le {new Date(contactInfo.memberSince).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}
+                </p>
+              </div>
+
+              {/* Contact infos */}
+              <div className="space-y-2.5">
+                <a
+                  href={`mailto:${contactInfo.reg.email}`}
+                  className="flex items-center gap-3 rounded-lg border border-border px-3 py-2.5 hover:bg-muted/50 transition-colors"
+                >
+                  <Mail className="h-4 w-4 text-primary shrink-0" />
+                  <span className="text-sm text-foreground">{contactInfo.reg.email}</span>
+                </a>
+
+                {contactInfo.reg.phone ? (
+                  <a
+                    href={`tel:${contactInfo.reg.phone}`}
+                    className="flex items-center gap-3 rounded-lg border border-border px-3 py-2.5 hover:bg-muted/50 transition-colors"
+                  >
+                    <Phone className="h-4 w-4 text-green-500 shrink-0" />
+                    <span className="text-sm text-foreground">{contactInfo.reg.phone}</span>
+                  </a>
+                ) : (
+                  <div className="flex items-center gap-3 rounded-lg border border-border px-3 py-2.5 opacity-50">
+                    <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="text-sm text-muted-foreground">Aucun téléphone renseigné</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Stats */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-lg border border-border p-3 text-center">
+                  <MessageCircle className="h-4 w-4 text-blue-500 mx-auto mb-1" />
+                  <p className="text-lg font-bold text-foreground">{contactInfo.creditsLeft}</p>
+                  <p className="text-[10px] text-muted-foreground leading-tight">Messages mentor restants</p>
+                </div>
+                <div className="rounded-lg border border-border p-3 text-center">
+                  <ShoppingBag className="h-4 w-4 text-primary mx-auto mb-1" />
+                  <p className="text-lg font-bold text-foreground">{contactInfo.confirmedInscriptions}</p>
+                  <p className="text-[10px] text-muted-foreground leading-tight">Achats confirmés</p>
+                </div>
+                <div className="rounded-lg border border-border p-3 text-center">
+                  <CalendarDays className="h-4 w-4 text-orange-500 mx-auto mb-1" />
+                  <p className="text-lg font-bold text-foreground">{contactInfo.totalInscriptions}</p>
+                  <p className="text-[10px] text-muted-foreground leading-tight">Total inscriptions</p>
+                </div>
+              </div>
+
+              {!contactInfo.reg.user_id && (
+                <p className="text-xs text-muted-foreground italic text-center">
+                  Inscription sans compte — données limitées
+                </p>
+              )}
+            </div>
+          )}
+          {contactInfo?.loading && (
+            <div className="py-8 text-center text-muted-foreground animate-pulse">Chargement…</div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Révocation Dialog */}
+      <Dialog open={!!revokeTarget} onOpenChange={() => { setRevokeTarget(null); setRevokeReason(""); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-purple-600">
+              <Ban className="h-5 w-5" />
+              Révoquer l'inscription
+            </DialogTitle>
+          </DialogHeader>
+          {revokeTarget && (
+            <div className="space-y-4 pt-1">
+              <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+                <p className="font-medium text-foreground">{revokeTarget.full_name}</p>
+                <p className="text-sm text-muted-foreground">{revokeTarget.product_title}</p>
+              </div>
+
+              <p className="text-sm text-muted-foreground">
+                Cette action supprime l'accès au produit et passe le statut en <strong>Révoqué</strong>.
+              </p>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">
+                  Motif <span className="text-muted-foreground font-normal">(optionnel — envoyé par email)</span>
+                </label>
+                <Textarea
+                  placeholder="Ex : Demande de remboursement acceptée, comportement contraire aux CGU…"
+                  value={revokeReason}
+                  onChange={(e) => setRevokeReason(e.target.value)}
+                  rows={3}
+                />
+              </div>
+
+              <div className="flex gap-3 justify-end">
+                <Button variant="outline" onClick={() => { setRevokeTarget(null); setRevokeReason(""); }}>
+                  Annuler
+                </Button>
+                <Button
+                  onClick={revokeRegistration}
+                  disabled={processingId === revokeTarget.id}
+                  className="bg-purple-600 hover:bg-purple-700 text-white gap-2"
+                >
+                  <Ban className="h-4 w-4" />
+                  {processingId === revokeTarget.id ? "…" : "Confirmer la révocation"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+      {/* Reschedule Dialog */}
+      <Dialog open={!!rescheduleTarget} onOpenChange={() => { setRescheduleTarget(null); setRescheduleDate(""); setRescheduleTime(""); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-blue-600">
+              <CalendarClock className="h-5 w-5" />
+              Reprogrammer la séance
+            </DialogTitle>
+          </DialogHeader>
+          {rescheduleTarget && (
+            <div className="space-y-4 pt-1">
+              <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+                <p className="font-medium text-foreground">{rescheduleTarget.full_name}</p>
+                <p className="text-sm text-muted-foreground">{rescheduleTarget.product_title}</p>
+                {rescheduleTarget.session_date && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Actuel : {new Date(rescheduleTarget.session_date).toLocaleDateString("fr-FR")} à {rescheduleTarget.session_time || "—"}
+                  </p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-foreground">Nouvelle date</label>
+                  <Input
+                    type="date"
+                    value={rescheduleDate}
+                    onChange={(e) => setRescheduleDate(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-foreground">Heure</label>
+                  <Input
+                    type="time"
+                    value={rescheduleTime}
+                    onChange={(e) => setRescheduleTime(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                Un email de confirmation sera automatiquement envoyé à {rescheduleTarget.email}.
+              </p>
+
+              <div className="flex gap-3 justify-end">
+                <Button variant="outline" onClick={() => { setRescheduleTarget(null); setRescheduleDate(""); setRescheduleTime(""); }}>
+                  Annuler
+                </Button>
+                <Button
+                  onClick={rescheduleSession}
+                  disabled={processingId === rescheduleTarget.id || !rescheduleDate || !rescheduleTime}
+                  className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
+                >
+                  <CalendarClock className="h-4 w-4" />
+                  {processingId === rescheduleTarget.id ? "…" : "Reprogrammer"}
+                </Button>
+              </div>
             </div>
           )}
         </DialogContent>

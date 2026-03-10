@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ArrowRight, Loader2, CheckCircle, Tag, UserCircle } from "lucide-react";
 import { toast } from "sonner";
 import type { CoachingPreselected } from "@/components/CoachingBookingWidget";
+import { createNotification } from "@/components/admin/NotificationBell";
 
 type GuestCheckoutProps = {
   open: boolean;
@@ -102,11 +103,13 @@ export function GuestCheckoutDialog({ open, onOpenChange, product, preselected }
     setCheckingPromo(true);
     const { data, error } = await supabase
       .from("promo_codes")
-      .select("id, discount_type, discount_value, applies_to_type, max_uses, times_used, expires_at, active")
+      .select("id, discount_type, discount_value, applies_to_type, applies_to_product_id, allowed_email, max_uses, times_used, expires_at, active")
       .eq("code", promoCode.trim().toUpperCase()).eq("active", true).maybeSingle();
 
     if (error || !data) { toast.error("Code promo invalide"); setPromoApplied(null); setCheckingPromo(false); return; }
-    if (data.applies_to_type && data.applies_to_type !== product.type) { toast.error("Ce code ne s'applique pas à ce type de produit"); setPromoApplied(null); setCheckingPromo(false); return; }
+    if ((data as any).applies_to_product_id && (data as any).applies_to_product_id !== product.id) { toast.error("Ce code ne s'applique pas à ce produit"); setPromoApplied(null); setCheckingPromo(false); return; }
+    if (!(data as any).applies_to_product_id && data.applies_to_type && data.applies_to_type !== product.type) { toast.error("Ce code ne s'applique pas à ce type de produit"); setPromoApplied(null); setCheckingPromo(false); return; }
+    if ((data as any).allowed_email && (data as any).allowed_email.toLowerCase() !== email.trim().toLowerCase()) { toast.error("Ce code est réservé à un autre utilisateur"); setPromoApplied(null); setCheckingPromo(false); return; }
     if ((data as any).max_uses > 0 && (data as any).times_used >= (data as any).max_uses) { toast.error("Ce code a atteint sa limite d'utilisation"); setPromoApplied(null); setCheckingPromo(false); return; }
     if ((data as any).expires_at && new Date((data as any).expires_at) < new Date()) { toast.error("Ce code a expiré"); setPromoApplied(null); setCheckingPromo(false); return; }
 
@@ -133,6 +136,7 @@ export function GuestCheckoutDialog({ open, onOpenChange, product, preselected }
         product_id: product.id,
         user_id: user?.id || null,
         status: "pending",
+        amount: finalPrice,
       };
 
       if (needsDelivery) {
@@ -166,6 +170,23 @@ export function GuestCheckoutDialog({ open, onOpenChange, product, preselected }
 
       if (promoApplied) {
         await supabase.rpc("increment_promo_usage" as any, { promo_id: promoApplied.id } as any);
+      }
+
+      // Notify admin
+      if (finalPrice > 0) {
+        await createNotification(
+          "payment_proof",
+          `💳 Paiement soumis — ${product.title}`,
+          `${nameToUse} (${emailToUse}) a soumis un paiement de ${finalPrice.toLocaleString("fr-FR")} FCFA`,
+          "/admin/registrations"
+        );
+      } else {
+        await createNotification(
+          "registration",
+          `Nouvelle inscription gratuite — ${product.title}`,
+          `${nameToUse} (${emailToUse})`,
+          "/admin/registrations"
+        );
       }
 
       toast.success("Inscription enregistrée ✓");

@@ -15,6 +15,8 @@ type PromoCode = {
   discount_type: string;
   discount_value: number;
   applies_to_type: string | null;
+  applies_to_product_id: string | null;
+  allowed_email: string | null;
   max_uses: number;
   times_used: number;
   active: boolean;
@@ -22,11 +24,15 @@ type PromoCode = {
   created_at: string;
 };
 
+type Product = { id: string; title: string };
+
 const emptyForm = {
   code: "",
   discount_type: "percentage",
   discount_value: 10,
   applies_to_type: null as string | null,
+  applies_to_product_id: null as string | null,
+  allowed_email: "",
   max_uses: 0,
   active: true,
   expires_at: "",
@@ -34,17 +40,22 @@ const emptyForm = {
 
 export default function AdminPromoCodes() {
   const [codes, setCodes] = useState<PromoCode[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
 
-  useEffect(() => { fetchCodes(); }, []);
+  useEffect(() => { fetchData(); }, []);
 
-  const fetchCodes = async () => {
+  const fetchData = async () => {
     setLoading(true);
-    const { data } = await supabase.from("promo_codes").select("*").order("created_at", { ascending: false });
-    setCodes((data as any[]) || []);
+    const [{ data: codesData }, { data: prodsData }] = await Promise.all([
+      supabase.from("promo_codes").select("*").order("created_at", { ascending: false }),
+      supabase.from("products").select("id, title").eq("status", "active").order("title"),
+    ]);
+    setCodes((codesData as any[]) || []);
+    setProducts((prodsData as any[]) || []);
     setLoading(false);
   };
 
@@ -61,6 +72,8 @@ export default function AdminPromoCodes() {
       discount_type: c.discount_type,
       discount_value: c.discount_value,
       applies_to_type: c.applies_to_type,
+      applies_to_product_id: c.applies_to_product_id,
+      allowed_email: c.allowed_email || "",
       max_uses: c.max_uses,
       active: c.active,
       expires_at: c.expires_at ? c.expires_at.slice(0, 10) : "",
@@ -76,7 +89,9 @@ export default function AdminPromoCodes() {
       code: form.code.trim().toUpperCase(),
       discount_type: form.discount_type,
       discount_value: form.discount_value,
-      applies_to_type: form.applies_to_type,
+      applies_to_type: form.applies_to_product_id ? null : form.applies_to_type,
+      applies_to_product_id: form.applies_to_product_id || null,
+      allowed_email: form.allowed_email.trim() || null,
       max_uses: form.max_uses,
       active: form.active,
       expires_at: form.expires_at ? new Date(form.expires_at).toISOString() : null,
@@ -92,7 +107,7 @@ export default function AdminPromoCodes() {
       toast.success("Code promo créé");
     }
     setDialogOpen(false);
-    fetchCodes();
+    fetchData();
   };
 
   const handleDelete = async (id: string) => {
@@ -100,16 +115,23 @@ export default function AdminPromoCodes() {
     const { error } = await supabase.from("promo_codes").delete().eq("id", id);
     if (error) { toast.error(error.message); return; }
     toast.success("Code supprimé");
-    fetchCodes();
+    fetchData();
   };
 
   const toggleActive = async (c: PromoCode) => {
     const { error } = await supabase.from("promo_codes").update({ active: !c.active }).eq("id", c.id);
     if (error) { toast.error(error.message); return; }
-    fetchCodes();
+    fetchData();
   };
 
-  const typeLabels: Record<string, string> = { guide: "Guide", masterclass: "Masterclass", app: "App", book: "Livre", formation: "Formation" };
+  const typeLabels: Record<string, string> = { guide: "Guide", masterclass: "Masterclass", app: "App", book: "Livre", formation: "Formation", coaching: "Coaching", activite: "Activité" };
+  const prodMap = Object.fromEntries(products.map(p => [p.id, p.title]));
+
+  const scopeLabel = (c: PromoCode) => {
+    if (c.applies_to_product_id) return `🎯 ${prodMap[c.applies_to_product_id] || "Produit spécifique"}`;
+    if (c.applies_to_type) return typeLabels[c.applies_to_type] || c.applies_to_type;
+    return "Tous";
+  };
 
   if (loading) return <div className="flex items-center justify-center py-20 text-muted-foreground animate-pulse">Chargement…</div>;
 
@@ -126,7 +148,8 @@ export default function AdminPromoCodes() {
             <tr className="border-b border-border bg-muted/30">
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">Code</th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">Remise</th>
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground">S'applique à</th>
+              <th className="px-4 py-3 text-left font-medium text-muted-foreground">Portée</th>
+              <th className="px-4 py-3 text-left font-medium text-muted-foreground">Email autorisé</th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">Utilisations</th>
               <th className="px-4 py-3 text-left font-medium text-muted-foreground">Actif</th>
               <th className="px-4 py-3 text-right font-medium text-muted-foreground">Actions</th>
@@ -134,14 +157,17 @@ export default function AdminPromoCodes() {
           </thead>
           <tbody>
             {codes.length === 0 ? (
-              <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">Aucun code promo</td></tr>
+              <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Aucun code promo</td></tr>
             ) : codes.map((c) => (
               <tr key={c.id} className="border-b border-border last:border-0">
                 <td className="px-4 py-3 font-mono font-bold text-foreground">{c.code}</td>
                 <td className="px-4 py-3 text-foreground">
                   {c.discount_type === "percentage" ? `${c.discount_value}%` : `${c.discount_value.toLocaleString("fr-FR")} FCFA`}
                 </td>
-                <td className="px-4 py-3 text-muted-foreground">{c.applies_to_type ? typeLabels[c.applies_to_type] || c.applies_to_type : "Tous"}</td>
+                <td className="px-4 py-3 text-muted-foreground">{scopeLabel(c)}</td>
+                <td className="px-4 py-3 text-muted-foreground text-xs">
+                  {c.allowed_email ? <span className="font-mono bg-muted px-1.5 py-0.5 rounded">{c.allowed_email}</span> : "—"}
+                </td>
                 <td className="px-4 py-3 text-muted-foreground">{c.times_used}{c.max_uses > 0 ? `/${c.max_uses}` : " / ∞"}</td>
                 <td className="px-4 py-3">
                   <Switch checked={c.active} onCheckedChange={() => toggleActive(c)} />
@@ -182,20 +208,52 @@ export default function AdminPromoCodes() {
                 <Input type="number" min={1} value={form.discount_value} onChange={(e) => setForm({ ...form, discount_value: parseInt(e.target.value) || 0 })} />
               </div>
             </div>
+
+            {/* Scope: product type OR specific product */}
             <div className="space-y-2">
-              <Label>S'applique au type de produit</Label>
-              <Select value={form.applies_to_type || "all"} onValueChange={(v) => setForm({ ...form, applies_to_type: v === "all" ? null : v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Label>Produit spécifique <span className="text-muted-foreground font-normal">(prioritaire sur le type)</span></Label>
+              <Select
+                value={form.applies_to_product_id || "none"}
+                onValueChange={(v) => setForm({ ...form, applies_to_product_id: v === "none" ? null : v })}
+              >
+                <SelectTrigger><SelectValue placeholder="Aucun (utiliser le type)" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Tous les produits</SelectItem>
-                  <SelectItem value="guide">Guide</SelectItem>
-                  <SelectItem value="masterclass">Masterclass</SelectItem>
-                  <SelectItem value="formation">Formation</SelectItem>
-                  <SelectItem value="book">Livre</SelectItem>
-                  <SelectItem value="app">App</SelectItem>
+                  <SelectItem value="none">Aucun produit spécifique</SelectItem>
+                  {products.map(p => <SelectItem key={p.id} value={p.id}>{p.title}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
+
+            {!form.applies_to_product_id && (
+              <div className="space-y-2">
+                <Label>S'applique au type de produit</Label>
+                <Select value={form.applies_to_type || "all"} onValueChange={(v) => setForm({ ...form, applies_to_type: v === "all" ? null : v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tous les produits</SelectItem>
+                    <SelectItem value="guide">Guide</SelectItem>
+                    <SelectItem value="masterclass">Masterclass</SelectItem>
+                    <SelectItem value="formation">Formation</SelectItem>
+                    <SelectItem value="coaching">Coaching</SelectItem>
+                    <SelectItem value="activite">Activité</SelectItem>
+                    <SelectItem value="book">Livre</SelectItem>
+                    <SelectItem value="app">App</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label>Email autorisé <span className="text-muted-foreground font-normal">(vide = tout le monde)</span></Label>
+              <Input
+                type="email"
+                value={form.allowed_email}
+                onChange={(e) => setForm({ ...form, allowed_email: e.target.value })}
+                placeholder="client@email.com"
+              />
+              <p className="text-xs text-muted-foreground">Si renseigné, seul cet email pourra utiliser ce code.</p>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Utilisations max (0 = illimité)</Label>

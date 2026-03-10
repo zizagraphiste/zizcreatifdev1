@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowRight, Sparkles, BookOpen, Users, Mic, Target, CheckCircle } from "lucide-react";
+import { ArrowRight, Sparkles, BookOpen, Users, Mic, Target, CheckCircle, Phone } from "lucide-react";
 
 type OnboardingProps = {
   userId: string;
@@ -23,6 +23,7 @@ const STEPS = 3;
 export function Onboarding({ userId, initialName = "", onComplete }: OnboardingProps) {
   const [step, setStep] = useState(1);
   const [name, setName] = useState(initialName);
+  const [phone, setPhone] = useState("");
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
@@ -38,6 +39,7 @@ export function Onboarding({ userId, initialName = "", onComplete }: OnboardingP
       .from("profiles")
       .update({
         full_name: name.trim() || initialName,
+        phone: phone.trim() || null,
         interests: selectedInterests,
         onboarding_completed: true,
       } as any)
@@ -97,22 +99,40 @@ export function Onboarding({ userId, initialName = "", onComplete }: OnboardingP
                 </p>
               </div>
 
-              <div className="text-left space-y-2">
-                <label className="text-sm font-medium text-foreground">
-                  Comment tu t'appelles ?
-                </label>
-                <Input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Ton prénom"
-                  className="text-base h-12"
-                  autoFocus
-                />
+              <div className="space-y-4">
+                <div className="text-left space-y-2">
+                  <label className="text-sm font-medium text-foreground">
+                    Comment tu t'appelles ?
+                  </label>
+                  <Input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Ton prénom"
+                    className="text-base h-12"
+                    autoFocus
+                  />
+                </div>
+                <div className="text-left space-y-2">
+                  <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                    <Phone className="h-4 w-4 text-primary" />
+                    Ton numéro WhatsApp <span className="text-primary">*</span>
+                  </label>
+                  <Input
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    type="tel"
+                    placeholder="+221 77 000 00 00"
+                    className="text-base h-12"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Utilisé uniquement pour te contacter pour tes réservations.
+                  </p>
+                </div>
               </div>
 
               <Button
                 onClick={() => setStep(2)}
-                disabled={!name.trim()}
+                disabled={!name.trim() || !phone.trim()}
                 className="w-full h-12 bg-primary text-primary-foreground font-bold gap-2 text-base"
               >
                 Continuer <ArrowRight className="h-5 w-5" />
