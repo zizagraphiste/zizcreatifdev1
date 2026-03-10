@@ -7,7 +7,7 @@ import { useSiteContent } from "@/hooks/useSiteContent";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowRight, Sparkles, BookOpen, Users, Zap, MapPin, Video, Calendar, Clock, UserCheck, CalendarHeart } from "lucide-react";
+import { ArrowRight, Sparkles, BookOpen, Users, Zap, MapPin, Video, Calendar, Clock, UserCheck, CalendarHeart, Heart } from "lucide-react";
 
 // Activity types are fetched dynamically from the DB — no hardcoded list here
 import { ActivityIcon } from "@/components/admin/AdminActivites";
@@ -54,7 +54,7 @@ function HeroSection({ get }: { get: (key: string, fb: string) => string }) {
       {/* Cover image */}
       {coverImage && (
         <div className="absolute inset-0">
-          <img src={coverImage} alt="" className="w-full h-full object-cover" style={{ objectPosition: `${x}% ${y}%` }} />
+          <img src={coverImage} alt="" loading="eager" className="w-full h-full object-cover" style={{ objectPosition: `${x}% ${y}%` }} />
           <div className="absolute inset-0 bg-gradient-to-r from-background via-background/80 to-transparent" />
         </div>
       )}
@@ -160,6 +160,41 @@ function ValueProps({ get }: { get: (key: string, fb: string) => string }) {
   );
 }
 
+function WishlistButton({ productId }: { productId: string }) {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase.from("wishlists" as any).select("id").eq("user_id", user.id).eq("product_id", productId).maybeSingle()
+      .then(({ data }) => setSaved(!!data));
+  }, [user, productId]);
+
+  const toggle = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!user) { navigate("/login"); return; }
+    if (saved) {
+      await supabase.from("wishlists" as any).delete().eq("user_id", user.id).eq("product_id", productId);
+    } else {
+      await supabase.from("wishlists" as any).insert({ user_id: user.id, product_id: productId });
+    }
+    setSaved((v) => !v);
+  };
+
+  return (
+    <button
+      onClick={toggle}
+      className={`absolute top-2 left-2 z-10 flex h-7 w-7 items-center justify-center rounded-full backdrop-blur-sm transition-colors ${
+        saved ? "bg-red-500 text-white" : "bg-background/70 text-muted-foreground hover:text-red-500"
+      }`}
+      title={saved ? "Retirer des favoris" : "Ajouter aux favoris"}
+    >
+      <Heart className={`h-3.5 w-3.5 ${saved ? "fill-current" : ""}`} />
+    </button>
+  );
+}
+
 function ProductCard({ product, index }: { product: Product; index: number }) {
   const navigate = useNavigate();
   const unlimited = product.max_spots === 0;
@@ -183,8 +218,9 @@ function ProductCard({ product, index }: { product: Product; index: number }) {
       onClick={() => navigate(`/product/${product.id}`)}
     >
       <div className="relative h-44 bg-muted overflow-hidden">
+        <WishlistButton productId={product.id} />
         {product.cover_image_url ? (
-          <img src={product.cover_image_url} alt={product.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+          <img src={product.cover_image_url} alt={product.title} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-5xl">
             {product.thumbnail_emoji || "📦"}
@@ -259,8 +295,9 @@ function FormationCard({ product, index }: { product: Product; index: number }) 
     >
       {/* Cover image */}
       <div className="relative h-48 bg-muted overflow-hidden">
+        <WishlistButton productId={product.id} />
         {product.cover_image_url ? (
-          <img src={product.cover_image_url} alt={product.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+          <img src={product.cover_image_url} alt={product.title} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-6xl bg-gradient-to-br from-primary/10 to-primary/5">
             {product.thumbnail_emoji || "🎓"}
@@ -601,7 +638,7 @@ function ActivityCard({ product, index, typeMap }: { product: Product; index: nu
     >
       <div className="relative h-44 bg-muted overflow-hidden">
         {product.cover_image_url ? (
-          <img src={product.cover_image_url} alt={product.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+          <img src={product.cover_image_url} alt={product.title} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-6xl bg-gradient-to-br from-primary/10 to-primary/5">{product.thumbnail_emoji || info.emoji}</div>
         )}

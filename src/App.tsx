@@ -15,6 +15,7 @@ import ResetPassword from "./pages/ResetPassword";
 import Payment from "./pages/Payment";
 import ProductPage from "./pages/ProductPage";
 import NotFound from "./pages/NotFound";
+import Ticket from "./pages/Ticket";
 
 const queryClient = new QueryClient();
 
@@ -64,6 +65,7 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+            <Route path="/ticket/:registrationId" element={<Ticket />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>

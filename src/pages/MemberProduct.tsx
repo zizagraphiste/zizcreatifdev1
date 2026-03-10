@@ -147,7 +147,7 @@ export default function MemberProduct() {
           </Button>
         </Link>
         {product?.cover_image_url ? (
-          <img src={product.cover_image_url} alt={product.title} className="w-8 h-8 rounded object-cover" />
+          <img src={product.cover_image_url} alt={product.title} loading="lazy" className="w-8 h-8 rounded object-cover" />
         ) : (
           <span className="text-2xl">{product?.thumbnail_emoji || "📦"}</span>
         )}

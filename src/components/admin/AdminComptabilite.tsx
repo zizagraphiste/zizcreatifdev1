@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Download, Calendar, Package, TrendingUp, CheckCircle, Clock } from "lucide-react";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
 
 type Transaction = {
   id: string;
@@ -129,6 +130,20 @@ export default function AdminComptabilite() {
   const productStats = Object.values(byProduct).sort((a, b) => b.total - a.total);
   const maxProductTotal = productStats[0]?.total || 1;
 
+  /* ── Monthly chart data (all-time, last 12 months) ── */
+  const chartData = (() => {
+    const now = new Date();
+    return Array.from({ length: 12 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (11 - i), 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const total = allConfirmed
+        .filter((t) => t.created_at.startsWith(key))
+        .reduce((s, t) => s + t.product_price, 0);
+      const count = allConfirmed.filter((t) => t.created_at.startsWith(key)).length;
+      return { month: shortMonth(key), total, count };
+    });
+  })();
+
   /* ── Export CSV ── */
   const exportCSV = () => {
     const header = "Date,Nom,Email,Produit,Montant,Devise,Statut";
@@ -206,6 +221,58 @@ export default function AdminComptabilite() {
           iconBg="bg-muted"
         />
       </div>
+
+      {/* ── Revenue chart ── */}
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-muted/30">
+          <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          <h2 className="font-semibold text-sm text-foreground">Revenus mensuels (12 derniers mois)</h2>
+        </div>
+        <div className="p-4">
+          <ResponsiveContainer width="100%" height={200}>
+            <AreaChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="colorRevenu" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis dataKey="month" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} tickFormatter={(v) => v === 0 ? "0" : `${(v / 1000).toFixed(0)}k`} />
+              <Tooltip
+                contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: 12 }}
+                formatter={(value: number) => [`${value.toLocaleString("fr-FR")} FCFA`, "Revenus"]}
+              />
+              <Area type="monotone" dataKey="total" stroke="hsl(var(--primary))" strokeWidth={2} fill="url(#colorRevenu)" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* ── Sales per product chart ── */}
+      {productStats.length > 1 && (
+        <div className="rounded-xl border border-border bg-card overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-muted/30">
+            <Package className="h-4 w-4 text-muted-foreground" />
+            <h2 className="font-semibold text-sm text-foreground">Ventes par produit</h2>
+          </div>
+          <div className="p-4">
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart data={productStats.slice(0, 6)} margin={{ top: 4, right: 8, left: 0, bottom: 40 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="title" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} angle={-30} textAnchor="end" interval={0} />
+                <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} allowDecimals={false} />
+                <Tooltip
+                  contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: 12 }}
+                  formatter={(value: number) => [value, "Ventes"]}
+                />
+                <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
 
       {/* ── Filter ── */}
       <div className="flex items-center gap-3 flex-wrap">

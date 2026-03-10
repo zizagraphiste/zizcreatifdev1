@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   LogOut, ArrowRight, Package, ShoppingBag, MessageCircle,
-  User, Home, Lock, CheckCircle, Clock, Camera,
+  User, Home, Lock, CheckCircle, Clock, Camera, Heart,
 } from "lucide-react";
 import MentorChat from "@/components/MentorChat";
 import { Onboarding } from "@/components/Onboarding";
@@ -46,6 +46,17 @@ type Profile = {
   avatar_url: string | null;
 };
 
+type WishlistItem = {
+  id: string;
+  product_id: string;
+  title: string;
+  thumbnail_emoji: string | null;
+  cover_image_url: string | null;
+  type: string | null;
+  price: number;
+  currency: string | null;
+};
+
 function useCountdown(target: Date | null) {
   const [now, setNow] = useState(new Date());
   useEffect(() => {
@@ -75,6 +86,7 @@ function AccessCard({ item }: { item: GrantedProduct }) {
           <img
             src={item.cover_image_url}
             alt={item.title}
+            loading="lazy"
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           />
         </div>
@@ -147,6 +159,7 @@ export default function Member() {
   const [profile, setProfile] = useState<Profile>({ full_name: "", phone: "", onboarding_completed: true, avatar_url: null });
   const [loading, setLoading] = useState(true);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [wishlist, setWishlist] = useState<WishlistItem[]>([]);
   const [savingProfile, setSavingProfile] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [newPassword, setNewPassword] = useState("");
@@ -159,6 +172,7 @@ export default function Member() {
         { data: grants },
         { data: regs },
         { data: prof },
+        { data: wish },
       ] = await Promise.all([
         supabase
           .from("access_grants")
@@ -174,6 +188,10 @@ export default function Member() {
           .select("full_name, phone, onboarding_completed, avatar_url")
           .eq("id", user.id)
           .single(),
+        supabase
+          .from("wishlists" as any)
+          .select("id, product_id, products(title, thumbnail_emoji, cover_image_url, type, price, currency)")
+          .eq("user_id", user.id),
       ]);
 
       setProducts(
@@ -213,6 +231,19 @@ export default function Member() {
       };
       setProfile(profData);
       if (!profData.onboarding_completed) setShowOnboarding(true);
+
+      setWishlist(
+        ((wish || []) as any[]).map((w) => ({
+          id: w.id,
+          product_id: w.product_id,
+          title: w.products?.title || "—",
+          thumbnail_emoji: w.products?.thumbnail_emoji,
+          cover_image_url: w.products?.cover_image_url,
+          type: w.products?.type,
+          price: w.products?.price || 0,
+          currency: w.products?.currency || "FCFA",
+        }))
+      );
 
       setLoading(false);
     })();
@@ -309,7 +340,7 @@ export default function Member() {
           <div className="flex items-center justify-center py-20 text-muted-foreground animate-pulse">Chargement…</div>
         ) : (
           <Tabs defaultValue="acces" className="space-y-6">
-            <TabsList className="w-full sm:w-auto grid grid-cols-4 sm:flex h-auto p-1">
+            <TabsList className="w-full sm:w-auto grid grid-cols-5 sm:flex h-auto p-1">
               <TabsTrigger value="acces" className="gap-1.5 text-xs sm:text-sm py-2">
                 <Package className="h-4 w-4 hidden sm:block" />
                 <span>Mes accès</span>
@@ -320,6 +351,13 @@ export default function Member() {
               <TabsTrigger value="commandes" className="gap-1.5 text-xs sm:text-sm py-2">
                 <ShoppingBag className="h-4 w-4 hidden sm:block" />
                 <span>Commandes</span>
+              </TabsTrigger>
+              <TabsTrigger value="favoris" className="gap-1.5 text-xs sm:text-sm py-2">
+                <Heart className="h-4 w-4 hidden sm:block" />
+                <span>Favoris</span>
+                {wishlist.length > 0 && (
+                  <Badge className="bg-red-500/15 text-red-500 text-xs">{wishlist.length}</Badge>
+                )}
               </TabsTrigger>
               <TabsTrigger value="mentor" className="gap-1.5 text-xs sm:text-sm py-2">
                 <MessageCircle className="h-4 w-4 hidden sm:block" />
@@ -365,6 +403,7 @@ export default function Member() {
                         <th className="hidden sm:table-cell px-4 py-3 text-left font-medium text-muted-foreground">Montant</th>
                         <th className="hidden sm:table-cell px-4 py-3 text-left font-medium text-muted-foreground">Date</th>
                         <th className="px-4 py-3 text-left font-medium text-muted-foreground">Statut</th>
+                        <th className="px-4 py-3" />
                       </tr>
                     </thead>
                     <tbody>
@@ -389,11 +428,56 @@ export default function Member() {
                                 {s.icon} {s.label}
                               </span>
                             </td>
+                            <td className="px-4 py-3">
+                              {r.status === "confirmed" && (
+                                <Link to={`/ticket/${r.id}`} className="text-xs text-primary hover:underline whitespace-nowrap">
+                                  Voir ticket
+                                </Link>
+                              )}
+                            </td>
                           </tr>
                         );
                       })}
                     </tbody>
                   </table>
+                </div>
+              )}
+            </TabsContent>
+
+            {/* ── Onglet : Favoris ── */}
+            <TabsContent value="favoris" className="space-y-4">
+              <h2 className="text-lg font-bold text-foreground">Mes favoris</h2>
+              {wishlist.length === 0 ? (
+                <div className="text-center py-14 space-y-4">
+                  <p className="text-5xl">🤍</p>
+                  <p className="text-muted-foreground">Aucun produit en favoris.</p>
+                  <a href="/">
+                    <button className="mt-2 rounded-lg border border-border px-4 py-2 text-sm text-muted-foreground hover:border-primary/40 hover:text-foreground transition-colors">
+                      Découvrir le catalogue
+                    </button>
+                  </a>
+                </div>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {wishlist.map((item) => (
+                    <a key={item.id} href={`/product/${item.product_id}`} className="group rounded-xl border border-border bg-card overflow-hidden hover:border-primary/40 transition-colors">
+                      <div className="h-36 overflow-hidden">
+                        {item.cover_image_url ? (
+                          <img src={item.cover_image_url} alt={item.title} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-4xl bg-gradient-to-br from-primary/10 to-primary/5">
+                            {item.thumbnail_emoji || "📦"}
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-4">
+                        <p className="font-semibold text-foreground text-sm line-clamp-2">{item.title}</p>
+                        <p className="text-xs text-primary font-bold mt-1">
+                          {item.price > 0 ? `${item.price.toLocaleString("fr-FR")} ${item.currency}` : "Gratuit"}
+                        </p>
+                      </div>
+                    </a>
+                  ))}
                 </div>
               )}
             </TabsContent>

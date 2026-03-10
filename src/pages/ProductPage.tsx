@@ -12,6 +12,7 @@ import {
   UserCheck, Users, ImageOff, Share2, Copy, Check,
   Utensils, TreePine, Rocket, Wine, Shirt, Moon,
 } from "lucide-react";
+import QRCode from "react-qr-code";
 import { GuestCheckoutDialog } from "@/components/GuestCheckoutDialog";
 import { CoachingBookingWidget, type CoachingPreselected } from "@/components/CoachingBookingWidget";
 import { DRESS_CODES } from "@/constants/activities";
@@ -67,6 +68,7 @@ export default function ProductPage() {
   const [loading, setLoading] = useState(true);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showQr, setShowQr] = useState(false);
   const [preselected, setPreselected] = useState<CoachingPreselected | null>(null);
 
   const handleCheckoutOpenChange = (open: boolean) => {
@@ -190,6 +192,7 @@ export default function ProductPage() {
           <img
             src={product.cover_image_url}
             alt={product.title}
+            loading="lazy"
             className="w-full h-full object-cover"
           />
         ) : (
@@ -606,7 +609,20 @@ export default function ProductPage() {
               {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
               {copied ? "Copié !" : "Copier le lien"}
             </button>
+            {/* QR Code toggle */}
+            <button
+              onClick={() => setShowQr((v) => !v)}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-card hover:bg-muted text-sm font-medium transition-colors"
+            >
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h.01M18 14h.01M14 18h.01M18 18h.01M14 14v4h4v-4z"/></svg>
+              QR Code
+            </button>
           </div>
+          {showQr && (
+            <div className="mt-3 inline-block rounded-xl border border-border bg-white p-3">
+              <QRCode value={window.location.href} size={128} />
+            </div>
+          )}
         </motion.div>
 
         {/* Modules list (non-formation) */}
