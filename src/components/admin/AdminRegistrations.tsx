@@ -9,6 +9,28 @@ import { CheckCircle, XCircle, Phone, Clock, UserRound, Mail, MessageCircle, Cal
 import { toast } from "sonner";
 import { differenceInMonths } from "date-fns";
 
+const DURATIONS = [
+  { label: "15 jours", value: "15d" },
+  { label: "1 mois",   value: "1m" },
+  { label: "3 mois",   value: "3m" },
+  { label: "Définitif", value: "permanent" },
+];
+
+const RESTORE_DURATIONS = [
+  { label: "15 jours",        value: "15d" },
+  { label: "1 mois",          value: "1m" },
+  { label: "3 mois",          value: "3m" },
+  { label: "Illimité",        value: "permanent" },
+];
+
+function addDuration(duration: string): Date | null {
+  const now = new Date();
+  if (duration === "15d") return new Date(now.setDate(now.getDate() + 15));
+  if (duration === "1m")  return new Date(now.setMonth(now.getMonth() + 1));
+  if (duration === "3m")  return new Date(now.setMonth(now.getMonth() + 3));
+  return null; // permanent
+}
+
 type Registration = {
   id: string;
   full_name: string;
@@ -29,6 +51,7 @@ type Registration = {
   product_currency: string;
   session_date: string | null;
   session_time: string | null;
+  revoked_until: string | null;
 };
 
 type Product = {
@@ -54,6 +77,10 @@ export default function AdminRegistrations() {
   // Révocation
   const [revokeTarget, setRevokeTarget] = useState<Registration | null>(null);
   const [revokeReason, setRevokeReason] = useState("");
+  const [revokeDuration, setRevokeDuration] = useState("permanent");
+  // Restauration avec durée
+  const [restoreTarget, setRestoreTarget] = useState<Registration | null>(null);
+  const [restoreDuration, setRestoreDuration] = useState("permanent");
   // Reprogrammation coaching
   const [rescheduleTarget, setRescheduleTarget] = useState<Registration | null>(null);
   const [rescheduleDate, setRescheduleDate] = useState("");
@@ -115,27 +142,32 @@ export default function AdminRegistrations() {
     fetchData();
   };
 
-  const restoreRegistration = async (reg: Registration) => {
-    setProcessingId(reg.id);
+  const restoreRegistration = async () => {
+    if (!restoreTarget) return;
+    setProcessingId(restoreTarget.id);
     const { error } = await supabase
       .from("registrations")
-      .update({ status: "confirmed" } as any)
-      .eq("id", reg.id);
+      .update({ status: "confirmed", revoked_until: null } as any)
+      .eq("id", restoreTarget.id);
     if (error) { toast.error(error.message); setProcessingId(null); return; }
 
-    // Re-create access grant if user has an account
-    if (reg.user_id) {
-      const availableAt = reg.product_delivery_mode === "scheduled" && reg.product_delivery_date
-        ? reg.product_delivery_date
+    if (restoreTarget.user_id) {
+      const availableAt = restoreTarget.product_delivery_mode === "scheduled" && restoreTarget.product_delivery_date
+        ? restoreTarget.product_delivery_date
         : new Date().toISOString();
+      const expiresAt = addDuration(restoreDuration);
       await supabase.from("access_grants").insert({
-        user_id: reg.user_id,
-        product_id: reg.product_id,
+        user_id: restoreTarget.user_id,
+        product_id: restoreTarget.product_id,
         available_at: availableAt,
-      }).select(); // ignore duplicate error
+        ...(expiresAt ? { expires_at: expiresAt.toISOString() } : {}),
+      } as any).select();
     }
 
-    toast.success("Accès restauré");
+    const durationLabel = RESTORE_DURATIONS.find(d => d.value === restoreDuration)?.label || "";
+    toast.success(`Accès restauré${restoreDuration !== "permanent" ? ` pour ${durationLabel}` : " définitivement"}`);
+    setRestoreTarget(null);
+    setRestoreDuration("permanent");
     setProcessingId(null);
     fetchData();
   };
@@ -191,39 +223,45 @@ export default function AdminRegistrations() {
     if (!revokeTarget) return;
     setProcessingId(revokeTarget.id);
 
+    const revokedUntilDate = addDuration(revokeDuration);
     const { error } = await supabase
       .from("registrations")
-      .update({ status: "revoked" } as any)
+      .update({
+        status: "revoked",
+        revoked_until: revokedUntilDate ? revokedUntilDate.toISOString().slice(0, 10) : null,
+      } as any)
       .eq("id", revokeTarget.id);
     if (error) { toast.error(error.message); setProcessingId(null); return; }
 
-    // Remove access grant if exists
+    // Remove access grant
     if (revokeTarget.user_id) {
-      await supabase
-        .from("access_grants")
-        .delete()
+      await supabase.from("access_grants").delete()
         .eq("user_id", revokeTarget.user_id)
         .eq("product_id", revokeTarget.product_id);
     }
 
-    // Send revocation email via Resend if reason provided
-    if (revokeReason.trim()) {
-      await supabase.functions.invoke("send-email", {
-        body: {
-          to: revokeTarget.email,
-          subject: `Votre inscription a été révoquée — ${revokeTarget.product_title}`,
-          html: `<p>Bonjour ${revokeTarget.full_name},</p>
-<p>Votre inscription à <strong>${revokeTarget.product_title}</strong> a été révoquée.</p>
+    // Email avec durée
+    const durationLabel = DURATIONS.find(d => d.value === revokeDuration)?.label || "";
+    const durationText = revokeDuration !== "permanent"
+      ? `<p>Durée de la révocation : <strong>${durationLabel}</strong>${revokedUntilDate ? ` (jusqu'au ${revokedUntilDate.toLocaleDateString("fr-FR")})` : ""}</p>`
+      : "";
+    await supabase.functions.invoke("send-email", {
+      body: {
+        to: revokeTarget.email,
+        subject: `Votre accès a été révoqué — ${revokeTarget.product_title}`,
+        html: `<p>Bonjour ${revokeTarget.full_name},</p>
+<p>Votre accès à <strong>${revokeTarget.product_title}</strong> a été révoqué.</p>
+${durationText}
 ${revokeReason ? `<p><strong>Motif :</strong> ${revokeReason}</p>` : ""}
 <p>Pour toute question, répondez à cet email.</p>
 <p>Cordialement,<br/>L'équipe ZizCreatif</p>`,
-        },
-      });
-    }
+      },
+    });
 
-    toast.success("Inscription révoquée");
+    toast.success(`Accès révoqué${revokeDuration !== "permanent" ? ` pour ${durationLabel}` : " définitivement"}`);
     setRevokeTarget(null);
     setRevokeReason("");
+    setRevokeDuration("permanent");
     setProcessingId(null);
     fetchData();
   };
@@ -276,15 +314,15 @@ ${revokeReason ? `<p><strong>Motif :</strong> ${revokeReason}</p>` : ""}
 
   const pendingCount = registrations.filter(r => r.status === "paid").length;
 
-  const statusBadge = (status: string) => {
+  const statusBadge = (r: Registration) => {
     const map: Record<string, { bg: string; label: string }> = {
       pending:   { bg: "bg-muted text-muted-foreground", label: "En attente" },
       paid:      { bg: "bg-orange-500/15 text-orange-500", label: "🔔 À valider" },
       confirmed: { bg: "bg-green-500/15 text-green-500", label: "Confirmé" },
       rejected:  { bg: "bg-destructive/15 text-destructive", label: "Rejeté" },
-      revoked:   { bg: "bg-purple-500/15 text-purple-500", label: "Révoqué" },
+      revoked:   { bg: "bg-purple-500/15 text-purple-500", label: r.revoked_until ? `Révoqué jusqu'au ${new Date(r.revoked_until).toLocaleDateString("fr-FR")}` : "Révoqué définitivement" },
     };
-    const s = map[status] || map.pending;
+    const s = map[r.status] || map.pending;
     return <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${s.bg}`}>{s.label}</span>;
   };
 
@@ -381,7 +419,7 @@ ${revokeReason ? `<p><strong>Motif :</strong> ${revokeReason}</p>` : ""}
                   {new Date(r.created_at).toLocaleDateString("fr-FR")}
                 </td>
                 {/* Statut */}
-                <td className="px-4 py-3">{statusBadge(r.status)}</td>
+                <td className="px-4 py-3">{statusBadge(r)}</td>
                 {/* Actions */}
                 <td className="px-4 py-3">
                   <div className="flex items-center justify-end gap-2">
@@ -484,7 +522,7 @@ ${revokeReason ? `<p><strong>Motif :</strong> ${revokeReason}</p>` : ""}
                         variant="ghost"
                         size="sm"
                         disabled={processingId === r.id}
-                        onClick={() => restoreRegistration(r)}
+                        onClick={() => { setRestoreTarget(r); setRestoreDuration("permanent"); }}
                         className="text-green-600 hover:text-green-700 hover:bg-green-500/10 p-1.5"
                         title="Restaurer l'accès"
                       >
@@ -640,8 +678,28 @@ ${revokeReason ? `<p><strong>Motif :</strong> ${revokeReason}</p>` : ""}
                 />
               </div>
 
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Durée de la révocation</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {DURATIONS.map(d => (
+                    <button
+                      key={d.value}
+                      type="button"
+                      onClick={() => setRevokeDuration(d.value)}
+                      className={`px-3 py-2 rounded-lg border text-sm transition-colors ${
+                        revokeDuration === d.value
+                          ? "border-purple-600 bg-purple-600/10 text-purple-600 font-medium"
+                          : "border-border text-muted-foreground hover:border-purple-400"
+                      }`}
+                    >
+                      {d.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="flex gap-3 justify-end">
-                <Button variant="outline" onClick={() => { setRevokeTarget(null); setRevokeReason(""); }}>
+                <Button variant="outline" onClick={() => { setRevokeTarget(null); setRevokeReason(""); setRevokeDuration("permanent"); }}>
                   Annuler
                 </Button>
                 <Button
@@ -712,6 +770,64 @@ ${revokeReason ? `<p><strong>Motif :</strong> ${revokeReason}</p>` : ""}
                 >
                   <CalendarClock className="h-4 w-4" />
                   {processingId === rescheduleTarget.id ? "…" : "Reprogrammer"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Restauration Dialog */}
+      <Dialog open={!!restoreTarget} onOpenChange={() => { setRestoreTarget(null); setRestoreDuration("permanent"); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-green-600">
+              <RotateCcw className="h-5 w-5" />
+              Restaurer l'accès
+            </DialogTitle>
+          </DialogHeader>
+          {restoreTarget && (
+            <div className="space-y-4 pt-1">
+              <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+                <p className="font-medium text-foreground">{restoreTarget.full_name}</p>
+                <p className="text-sm text-muted-foreground">{restoreTarget.product_title}</p>
+              </div>
+
+              <p className="text-sm text-muted-foreground">
+                Choisissez la durée pendant laquelle l'accès sera rétabli.
+              </p>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Durée de la restauration</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {RESTORE_DURATIONS.map(d => (
+                    <button
+                      key={d.value}
+                      type="button"
+                      onClick={() => setRestoreDuration(d.value)}
+                      className={`px-3 py-2 rounded-lg border text-sm transition-colors ${
+                        restoreDuration === d.value
+                          ? "border-green-600 bg-green-600/10 text-green-600 font-medium"
+                          : "border-border text-muted-foreground hover:border-green-400"
+                      }`}
+                    >
+                      {d.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex gap-3 justify-end">
+                <Button variant="outline" onClick={() => { setRestoreTarget(null); setRestoreDuration("permanent"); }}>
+                  Annuler
+                </Button>
+                <Button
+                  onClick={restoreRegistration}
+                  disabled={processingId === restoreTarget.id}
+                  className="bg-green-600 hover:bg-green-700 text-white gap-2"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  {processingId === restoreTarget.id ? "…" : "Restaurer l'accès"}
                 </Button>
               </div>
             </div>
