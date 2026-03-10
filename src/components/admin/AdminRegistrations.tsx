@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { CheckCircle, XCircle, Phone, Clock, UserRound, Mail, MessageCircle, CalendarDays, ShoppingBag, Ban, CalendarClock } from "lucide-react";
+import { CheckCircle, XCircle, Phone, Clock, UserRound, Mail, MessageCircle, CalendarDays, ShoppingBag, Ban, CalendarClock, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { differenceInMonths } from "date-fns";
 
@@ -111,6 +111,31 @@ export default function AdminRegistrations() {
     toast.success("✅ Accès activé !");
     setProofUrl(null);
     setProofRegId(null);
+    setProcessingId(null);
+    fetchData();
+  };
+
+  const restoreRegistration = async (reg: Registration) => {
+    setProcessingId(reg.id);
+    const { error } = await supabase
+      .from("registrations")
+      .update({ status: "confirmed" } as any)
+      .eq("id", reg.id);
+    if (error) { toast.error(error.message); setProcessingId(null); return; }
+
+    // Re-create access grant if user has an account
+    if (reg.user_id) {
+      const availableAt = reg.product_delivery_mode === "scheduled" && reg.product_delivery_date
+        ? reg.product_delivery_date
+        : new Date().toISOString();
+      await supabase.from("access_grants").insert({
+        user_id: reg.user_id,
+        product_id: reg.product_id,
+        available_at: availableAt,
+      }).select(); // ignore duplicate error
+    }
+
+    toast.success("Accès restauré");
     setProcessingId(null);
     fetchData();
   };
@@ -450,6 +475,20 @@ ${revokeReason ? `<p><strong>Motif :</strong> ${revokeReason}</p>` : ""}
                         title="Révoquer l'accès"
                       >
                         <Ban className="h-4 w-4" />
+                      </Button>
+                    )}
+
+                    {/* Restore button for revoked */}
+                    {r.status === "revoked" && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={processingId === r.id}
+                        onClick={() => restoreRegistration(r)}
+                        className="text-green-600 hover:text-green-700 hover:bg-green-500/10 p-1.5"
+                        title="Restaurer l'accès"
+                      >
+                        <RotateCcw className="h-4 w-4" />
                       </Button>
                     )}
                   </div>
