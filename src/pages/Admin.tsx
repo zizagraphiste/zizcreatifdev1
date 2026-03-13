@@ -15,6 +15,7 @@ import AdminPaymentSettings from "@/components/admin/AdminPaymentSettings";
 import AdminComptabilite from "@/components/admin/AdminComptabilite";
 import AdminActivites from "@/components/admin/AdminActivites";
 import AdminProfilePage from "@/components/admin/AdminProfilePage";
+import AdminUsers from "@/components/admin/AdminUsers";
 
 export default function Admin() {
   return (
@@ -25,6 +26,7 @@ export default function Admin() {
         <Route path="products" element={<AdminProducts />} />
         <Route path="formations" element={<AdminFormations />} />
         <Route path="activites" element={<AdminActivites />} />
+        <Route path="users" element={<AdminUsers />} />
         <Route path="registrations" element={<AdminRegistrations />} />
         <Route path="comptabilite" element={<AdminComptabilite />} />
         <Route path="resources" element={<AdminResources />} />

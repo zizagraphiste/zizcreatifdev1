@@ -34,7 +34,12 @@ type Product = {
   date_mode: string | null;
   status: string | null;
   category_id: string | null;
+  created_at: string;
 };
+
+function isNew(created_at: string): boolean {
+  return Date.now() - new Date(created_at).getTime() < 48 * 60 * 60 * 1000;
+}
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
   visible: (i: number) => ({
@@ -202,6 +207,7 @@ function ProductCard({ product, index }: { product: Product; index: number }) {
   const isClosed = product.status === "closed" || (!unlimited && spotsLeft <= 0);
   const almostFull = !isClosed && !unlimited && spotsLeft <= 3;
   const isFree = product.price === 0;
+  const isNewProduct = isNew(product.created_at);
 
   return (
     <motion.div
@@ -227,6 +233,11 @@ function ProductCard({ product, index }: { product: Product; index: number }) {
           </div>
         )}
         <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
+          {isNewProduct && (
+            <Badge className="bg-emerald-500 text-white text-xs backdrop-blur-sm font-bold shadow-sm">
+              ✨ Nouveau
+            </Badge>
+          )}
           {product.type && (
             <Badge variant="secondary" className="capitalize text-xs backdrop-blur-sm">
               {product.type}
@@ -275,6 +286,7 @@ function FormationCard({ product, index }: { product: Product; index: number }) 
   const isClosed = product.status === "closed" || (!unlimited && spotsLeft <= 0);
   const spotsPercent = unlimited ? 0 : Math.min(100, ((product.spots_taken || 0) / product.max_spots) * 100);
   const isOnline = product.attendance_mode !== "in-person";
+  const isNewProduct = isNew(product.created_at);
 
   const formatDate = (d: string | null) => {
     if (!d) return null;
@@ -307,6 +319,9 @@ function FormationCard({ product, index }: { product: Product; index: number }) 
 
         {/* Badges top-right */}
         <div className="absolute top-3 right-3 flex flex-col items-end gap-1.5">
+          {isNewProduct && (
+            <Badge className="bg-emerald-500 text-white text-xs font-bold shadow-sm">✨ Nouveau</Badge>
+          )}
           <Badge className="bg-primary text-primary-foreground text-xs font-semibold">Formation</Badge>
           {isClosed && <Badge className="bg-destructive text-destructive-foreground text-xs">Complet</Badge>}
         </div>
@@ -400,7 +415,7 @@ function ProductsSection({ get }: { get: (key: string, fb: string) => string }) 
       const [prodRes, catRes] = await Promise.all([
         supabase
           .from("products")
-          .select("id, title, description, thumbnail_emoji, cover_image_url, type, price, currency, max_spots, spots_taken, delivery_mode, status, category_id")
+          .select("id, title, description, thumbnail_emoji, cover_image_url, type, price, currency, max_spots, spots_taken, delivery_mode, status, category_id, created_at")
           .in("status", ["active", "closed"])
           .neq("type", "formation")
           .neq("delivery_mode", "scheduled")
@@ -556,7 +571,7 @@ function FormationsSection() {
     (async () => {
       const { data } = await supabase
         .from("products")
-        .select("id, title, description, thumbnail_emoji, cover_image_url, type, price, currency, max_spots, spots_taken, delivery_mode, delivery_date, event_time, attendance_mode, venue, date_mode, status, category_id")
+        .select("id, title, description, thumbnail_emoji, cover_image_url, type, price, currency, max_spots, spots_taken, delivery_mode, delivery_date, event_time, attendance_mode, venue, date_mode, status, category_id, created_at")
         .eq("type", "formation")
         .in("status", ["active", "closed"])
         .order("created_at", { ascending: false });

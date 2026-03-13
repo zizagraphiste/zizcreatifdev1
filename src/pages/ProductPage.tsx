@@ -11,7 +11,9 @@ import {
   BookOpen, ClipboardCheck, MapPin, Video, Calendar, Clock,
   UserCheck, Users, ImageOff, Share2, Copy, Check,
   Utensils, TreePine, Rocket, Wine, Shirt, Moon,
+  Mic, ThumbsUp,
 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 import QRCode from "react-qr-code";
 import { GuestCheckoutDialog } from "@/components/GuestCheckoutDialog";
 import { CoachingBookingWidget, type CoachingPreselected } from "@/components/CoachingBookingWidget";
@@ -66,10 +68,14 @@ export default function ProductPage() {
   const [product, setProduct] = useState<Product | null>(null);
   const [modules, setModules] = useState<Module[]>([]);
   const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showQr, setShowQr] = useState(false);
   const [preselected, setPreselected] = useState<CoachingPreselected | null>(null);
+  const [voteCount, setVoteCount] = useState(0);
+  const [hasVoted, setHasVoted] = useState(false);
+  const [voteLoading, setVoteLoading] = useState(false);
 
   const handleCheckoutOpenChange = (open: boolean) => {
     setCheckoutOpen(open);
@@ -110,9 +116,28 @@ export default function ProductPage() {
         .eq("product_id", (p as any)?.id)
         .order("sort_order", { ascending: true });
       setModules((res as Module[]) || []);
+
+      // Votes masterclass (guides seulement)
+      if ((p as any)?.type === "guide") {
+        const { count } = await supabase
+          .from("masterclass_votes" as any)
+          .select("id", { count: "exact", head: true })
+          .eq("product_id", (p as any).id);
+        setVoteCount(count || 0);
+        if (user) {
+          const { data: myVote } = await supabase
+            .from("masterclass_votes" as any)
+            .select("id")
+            .eq("product_id", (p as any).id)
+            .eq("user_id", user.id)
+            .maybeSingle();
+          setHasVoted(!!myVote);
+        }
+      }
+
       setLoading(false);
     })();
-  }, [identifier]);
+  }, [identifier, user]);
 
   const handleOpenFreeResource = async (m: Module) => {
     if (m.type === "link" && m.external_url) {
@@ -624,6 +649,57 @@ export default function ProductPage() {
             </div>
           )}
         </motion.div>
+
+        {/* Vote masterclass — guides seulement */}
+        {product.type === "guide" && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.35 }}
+            className="rounded-2xl border border-border bg-primary/5 p-5 space-y-3"
+          >
+            <div className="flex items-center gap-2">
+              <Mic className="h-5 w-5 text-primary" />
+              <p className="font-bold text-foreground text-sm">Tu veux une Masterclass sur ce guide ?</p>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Si ce guide t'intéresse et que tu veux aller plus loin avec une session live + Q&A, vote ici.
+              Quand il y a assez de votes, on programme la masterclass !
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                disabled={voteLoading}
+                onClick={async () => {
+                  if (!user) { window.location.href = "/login"; return; }
+                  setVoteLoading(true);
+                  if (hasVoted) {
+                    await supabase.from("masterclass_votes" as any).delete().eq("product_id", product.id).eq("user_id", user.id);
+                    setHasVoted(false);
+                    setVoteCount((c) => Math.max(0, c - 1));
+                  } else {
+                    await supabase.from("masterclass_votes" as any).insert({ product_id: product.id, user_id: user.id });
+                    setHasVoted(true);
+                    setVoteCount((c) => c + 1);
+                  }
+                  setVoteLoading(false);
+                }}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl border font-semibold text-sm transition-all ${
+                  hasVoted
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-card text-foreground border-border hover:border-primary/50 hover:bg-primary/5"
+                }`}
+              >
+                <ThumbsUp className={`h-4 w-4 ${hasVoted ? "fill-current" : ""}`} />
+                {hasVoted ? "Je vote !" : "Voter pour une Masterclass"}
+              </button>
+              {voteCount > 0 && (
+                <span className="text-sm text-muted-foreground">
+                  {voteCount} personne{voteCount > 1 ? "s" : ""} vote{voteCount > 1 ? "nt" : ""} pour cette masterclass
+                </span>
+              )}
+            </div>
+          </motion.div>
+        )}
 
         {/* Modules list (non-formation) */}
         {modules.length > 0 && (

@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { CheckCircle, XCircle, Phone, Clock, UserRound, Mail, MessageCircle, CalendarDays, ShoppingBag, Ban, CalendarClock, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { differenceInMonths } from "date-fns";
+import { createAdminNotification } from "@/components/admin/NotificationBell";
 
 const DURATIONS = [
   { label: "15 jours", value: "15d" },
@@ -133,6 +134,48 @@ export default function AdminRegistrations() {
         setProcessingId(null);
         return;
       }
+    }
+
+    // ── Email de confirmation au client ──────────────────────────────────────
+    const isCoaching = reg.product_type === "coaching" || reg.product_delivery_mode === "coaching";
+    const sessionInfo = reg.session_date
+      ? `<p style="margin:8px 0"><strong>📅 Date :</strong> ${reg.session_date}${reg.session_time ? ` à ${reg.session_time}` : ""}</p>`
+      : "";
+
+    const confirmHtml = `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px">
+      <h2 style="color:#c9a227">✅ Paiement confirmé !</h2>
+      <p>Bonjour ${reg.full_name},</p>
+      <p>Ton paiement pour <strong>${reg.product_title}</strong> a bien été confirmé.</p>
+      ${sessionInfo}
+      <p>Tu peux maintenant accéder à ton espace membre sur <a href="https://zizcreatif.dev/member">zizcreatif.dev/member</a>.</p>
+      ${isCoaching ? `<p style="background:#f5f0e8;padding:12px;border-radius:8px;margin:16px 0">
+        📌 Tu recevras un rappel avant ta session de coaching.
+      </p>` : ""}
+      <hr style="margin:24px 0;border:none;border-top:1px solid #eee"/>
+      <p style="color:#888;font-size:12px">ZizCreatif · zizcreatif.dev</p>
+    </div>`;
+
+    if (reg.email) {
+      await supabase.functions.invoke("send-email", {
+        body: {
+          to: [reg.email],
+          subject: `✅ Paiement confirmé — ${reg.product_title}`,
+          html: confirmHtml,
+        },
+      });
+    }
+
+    // ── Si coaching : notif admin rappel ────────────────────────────────────
+    if (isCoaching) {
+      const when = reg.session_date
+        ? `le ${reg.session_date}${reg.session_time ? ` à ${reg.session_time}` : ""}`
+        : "date à définir";
+      await createAdminNotification(
+        "coaching",
+        `Coaching confirmé — ${reg.full_name}`,
+        `${reg.product_title} · ${when}`,
+        "/admin/registrations"
+      );
     }
 
     toast.success("✅ Accès activé !");

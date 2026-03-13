@@ -17,7 +17,7 @@ type MentorMessage = {
   admin_reply: string | null;
   replied_at: string | null;
   created_at: string;
-  profiles?: { full_name: string | null; email: string | null; avatar_url: string | null };
+  profiles?: { full_name: string | null; email: string | null; avatar_url: string | null; profession: string | null };
 };
 
 type AdminProfile = { full_name: string | null; avatar_url: string | null };
@@ -47,7 +47,7 @@ export default function AdminMentorMessages() {
     setLoading(true);
     const { data } = await supabase
       .from("mentor_messages")
-      .select("*, profiles(full_name, email, avatar_url)")
+      .select("*, profiles(full_name, email, avatar_url, profession)")
       .order("created_at", { ascending: false });
     setMessages((data as any[]) || []);
     setLoading(false);
@@ -133,6 +133,7 @@ function MessageThread({ m, adminName, adminProfile, replyingTo, replyText, expa
   replyRef?: React.RefObject<HTMLTextAreaElement>;
 }) {
   const userName = m.profiles?.full_name || "Membre";
+  const profession = m.profiles?.profession;
   const isReplying = replyingTo === m.id;
 
   return (
@@ -141,8 +142,13 @@ function MessageThread({ m, adminName, adminProfile, replyingTo, replyText, expa
       <button className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/20 transition-colors text-left" onClick={onToggle}>
         <AvatarCircle name={userName} avatarUrl={m.profiles?.avatar_url} size="sm" />
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-0.5">
+          <div className="flex items-center gap-2 mb-0.5 flex-wrap">
             <span className="font-semibold text-foreground text-sm">{userName}</span>
+            {profession && (
+              <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium shrink-0">
+                {profession}
+              </span>
+            )}
             <span className="text-xs text-muted-foreground truncate hidden sm:block">{m.profiles?.email}</span>
           </div>
           <p className="text-xs text-muted-foreground truncate">{m.message.slice(0, 80)}{m.message.length > 80 ? "…" : ""}</p>
@@ -162,7 +168,10 @@ function MessageThread({ m, adminName, adminProfile, replyingTo, replyText, expa
           <div className="flex items-end gap-3 pt-3">
             <AvatarCircle name={userName} avatarUrl={m.profiles?.avatar_url} size="sm" />
             <div className="max-w-[80%]">
-              <p className="text-[10px] text-muted-foreground mb-1 font-medium">{userName}</p>
+              <div className="flex items-center gap-2 mb-1">
+                <p className="text-[10px] text-muted-foreground font-medium">{userName}</p>
+                {profession && <p className="text-[10px] text-primary/70 font-medium">· {profession}</p>}
+              </div>
               <div className="bg-muted/40 rounded-2xl rounded-bl-sm px-4 py-3 border border-border">
                 <p className="text-sm whitespace-pre-wrap leading-relaxed">{m.message}</p>
               </div>

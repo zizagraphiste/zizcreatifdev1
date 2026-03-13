@@ -6,6 +6,7 @@ import {
   LayoutDashboard, Package, Users, FolderOpen, Mail, LogOut,
   Home, FileText, Tags, Ticket, MessageCircle, GraduationCap,
   Smartphone, TrendingUp, Menu, X, CalendarHeart, ChevronLeft, ChevronRight,
+  UserCheck, CreditCard,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { AvatarCircle } from "@/components/ui/AvatarCircle";
@@ -14,17 +15,22 @@ import { cn } from "@/lib/utils";
 
 const navItems = [
   { label: "Tableau de bord", path: "/admin", icon: LayoutDashboard },
+  // ── Contenu ──
   { label: "Produits", path: "/admin/products", icon: Package },
   { label: "Formations", path: "/admin/formations", icon: GraduationCap },
   { label: "Activités", path: "/admin/activites", icon: CalendarHeart },
-  { label: "Inscriptions", path: "/admin/registrations", icon: Users },
+  // ── Communauté ──
+  { label: "Utilisateurs", path: "/admin/users", icon: UserCheck },
+  { label: "Réservations & Paiements", path: "/admin/registrations", icon: CreditCard },
   { label: "Comptabilité", path: "/admin/comptabilite", icon: TrendingUp },
-  { label: "Modes de paiement", path: "/admin/payment-settings", icon: Smartphone },
-  { label: "Ressources", path: "/admin/resources", icon: FolderOpen },
+  // ── Relation ──
+  { label: "Mentor", path: "/admin/mentor", icon: MessageCircle },
   { label: "Emails", path: "/admin/emails", icon: Mail },
+  // ── Paramètres ──
+  { label: "Ressources", path: "/admin/resources", icon: FolderOpen },
+  { label: "Modes de paiement", path: "/admin/payment-settings", icon: Smartphone },
   { label: "Catégories", path: "/admin/categories", icon: Tags },
   { label: "Codes promo", path: "/admin/promo-codes", icon: Ticket },
-  { label: "Mentor", path: "/admin/mentor", icon: MessageCircle },
   { label: "Page d'accueil", path: "/admin/site-content", icon: FileText },
 ];
 
