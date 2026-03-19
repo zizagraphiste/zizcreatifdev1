@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        amount: reg.products.price.toString(),
+        amount: (reg.amount ?? reg.products.price).toString(),
         currency: "XOF",
         success_url: `${appUrl}/payment/success?reg=${registration_id}`,
         error_url: `${appUrl}/payment/error?reg=${registration_id}`,

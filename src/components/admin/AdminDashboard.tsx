@@ -116,7 +116,10 @@ export default function AdminDashboard() {
       const availableAt = reg.product_delivery_mode === "scheduled" && reg.product_delivery_date
         ? reg.product_delivery_date
         : new Date().toISOString();
-      await supabase.from("access_grants").insert({ user_id: reg.user_id, product_id: reg.product_id, available_at: availableAt });
+      await supabase.from("access_grants").upsert(
+        { user_id: reg.user_id, product_id: reg.product_id, available_at: availableAt },
+        { onConflict: "user_id,product_id" }
+      );
     }
     toast.success("✅ Accès activé !");
     setProcessingId(null);
