@@ -124,7 +124,7 @@ export default function AdminPromoCodes() {
     fetchData();
   };
 
-  const typeLabels: Record<string, string> = { guide: "Guide", masterclass: "Masterclass", app: "App", book: "Livre", formation: "Formation", coaching: "Coaching", activite: "Activité" };
+  const typeLabels: Record<string, string> = { guide: "Guide", app: "App", book: "Livre", formation: "Formation", coaching: "Coaching", activite: "Activité" };
   const prodMap = Object.fromEntries(products.map(p => [p.id, p.title]));
 
   const scopeLabel = (c: PromoCode) => {
@@ -232,7 +232,6 @@ export default function AdminPromoCodes() {
                   <SelectContent>
                     <SelectItem value="all">Tous les produits</SelectItem>
                     <SelectItem value="guide">Guide</SelectItem>
-                    <SelectItem value="masterclass">Masterclass</SelectItem>
                     <SelectItem value="formation">Formation</SelectItem>
                     <SelectItem value="coaching">Coaching</SelectItem>
                     <SelectItem value="activite">Activité</SelectItem>

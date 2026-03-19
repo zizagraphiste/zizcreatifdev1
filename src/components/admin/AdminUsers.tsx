@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { AvatarCircle } from "@/components/ui/AvatarCircle";
@@ -22,6 +24,7 @@ type UserRow = {
 };
 
 export default function AdminUsers() {
+  const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -29,50 +32,48 @@ export default function AdminUsers() {
   const [orders, setOrders] = useState<Record<string, any[]>>({});
 
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    if (currentUser) fetchUsers();
+  }, [currentUser]);
 
   const fetchUsers = async () => {
     setLoading(true);
-    // Profils avec agrégat commandes via jointure manuelle
-    const { data: profiles } = await supabase
+
+    // Tous les profils sauf l'admin courant
+    const { data: profiles, error: profilesError } = await supabase
       .from("profiles")
-      .select("id, full_name, phone, profession, avatar_url, created_at, onboarding_completed")
+      .select("id, full_name, email, phone, profession, avatar_url, created_at, onboarding_completed")
+      .neq("id", currentUser!.id)
       .order("created_at", { ascending: false });
 
-    if (!profiles) { setLoading(false); return; }
+    if (profilesError) {
+      console.error("AdminUsers — erreur profiles:", profilesError);
+      toast.error(`Erreur chargement membres : ${profilesError.message}`);
+      setLoading(false);
+      return;
+    }
 
-    // Pour chaque profil on récupère les commandes confirmées
+    if (!profiles || profiles.length === 0) {
+      setLoading(false);
+      return;
+    }
+
+    // Toutes les commandes confirmées/payées (par user_id OU email)
     const { data: regs } = await supabase
       .from("registrations")
-      .select("user_id, status, amount, currency")
+      .select("user_id, email, status, amount, currency")
       .in("status", ["confirmed", "paid"]);
 
-    // Récupérer les emails depuis auth (via profiles email si disponible)
-    const { data: authUsers } = await supabase
-      .from("profiles")
-      .select("id")
-      .limit(1); // just to test connection
-
-    // Chercher emails dans registrations
-    const { data: regEmails } = await supabase
-      .from("registrations")
-      .select("user_id, email")
-      .not("user_id", "is", null);
-
-    const emailMap: Record<string, string> = {};
-    (regEmails || []).forEach((r: any) => {
-      if (r.user_id && r.email) emailMap[r.user_id] = r.email;
-    });
-
     const rows: UserRow[] = profiles.map((p: any) => {
-      const userRegs = (regs || []).filter((r: any) => r.user_id === p.id);
+      const profileEmail = p.email;
+      const userRegs = (regs || []).filter((r: any) =>
+        (r.user_id && r.user_id === p.id) || (profileEmail && r.email === profileEmail)
+      );
       const totalSpent = userRegs.reduce((s: number, r: any) => s + (r.amount || 0), 0);
       const currency = userRegs[0]?.currency || "FCFA";
       return {
         id: p.id,
         full_name: p.full_name,
-        email: emailMap[p.id] || null,
+        email: p.email || null,
         phone: p.phone,
         profession: p.profession,
         avatar_url: p.avatar_url,
@@ -88,12 +89,16 @@ export default function AdminUsers() {
     setLoading(false);
   };
 
-  const fetchOrders = async (userId: string) => {
+  const fetchOrders = async (userId: string, userEmail?: string | null) => {
     if (orders[userId]) return;
+    // Cherche par user_id OU par email (pour les réservations invités sans user_id)
+    const filter = userEmail
+      ? `user_id.eq.${userId},email.eq.${userEmail}`
+      : `user_id.eq.${userId}`;
     const { data } = await supabase
       .from("registrations")
-      .select("id, status, amount, currency, created_at, product_title")
-      .eq("user_id", userId)
+      .select("id, status, amount, currency, created_at, product_title, email")
+      .or(filter)
       .order("created_at", { ascending: false });
     setOrders((prev) => ({ ...prev, [userId]: data || [] }));
   };
@@ -101,7 +106,8 @@ export default function AdminUsers() {
   const toggle = async (userId: string) => {
     if (expanded === userId) { setExpanded(null); return; }
     setExpanded(userId);
-    await fetchOrders(userId);
+    const u = users.find((u) => u.id === userId);
+    await fetchOrders(userId, u?.email);
   };
 
   const filtered = users.filter((u) => {

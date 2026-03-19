@@ -292,6 +292,7 @@ export default function Member() {
       <Onboarding
         userId={user.id}
         initialName={profile.full_name}
+        initialEmail={user.email ?? ""}
         onComplete={() => {
           setShowOnboarding(false);
           setProfile((p) => ({ ...p, onboarding_completed: true }));
@@ -341,31 +342,31 @@ export default function Member() {
         ) : (
           <Tabs defaultValue="acces" className="space-y-6">
             <TabsList className="w-full sm:w-auto grid grid-cols-5 sm:flex h-auto p-1">
-              <TabsTrigger value="acces" className="gap-1.5 text-xs sm:text-sm py-2">
-                <Package className="h-4 w-4 hidden sm:block" />
-                <span>Mes accès</span>
+              <TabsTrigger value="acces" className="flex-col sm:flex-row gap-0.5 sm:gap-1.5 text-[10px] sm:text-sm py-2 px-1 sm:px-3">
+                <Package className="h-4 w-4 shrink-0" />
+                <span className="truncate">Accès</span>
                 {products.length > 0 && (
-                  <Badge className="bg-primary/15 text-primary text-xs">{products.length}</Badge>
+                  <Badge className="bg-primary/15 text-primary text-[10px] hidden sm:inline-flex">{products.length}</Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="commandes" className="gap-1.5 text-xs sm:text-sm py-2">
-                <ShoppingBag className="h-4 w-4 hidden sm:block" />
-                <span>Commandes</span>
+              <TabsTrigger value="commandes" className="flex-col sm:flex-row gap-0.5 sm:gap-1.5 text-[10px] sm:text-sm py-2 px-1 sm:px-3">
+                <ShoppingBag className="h-4 w-4 shrink-0" />
+                <span className="truncate">Commandes</span>
               </TabsTrigger>
-              <TabsTrigger value="favoris" className="gap-1.5 text-xs sm:text-sm py-2">
-                <Heart className="h-4 w-4 hidden sm:block" />
-                <span>Favoris</span>
+              <TabsTrigger value="favoris" className="flex-col sm:flex-row gap-0.5 sm:gap-1.5 text-[10px] sm:text-sm py-2 px-1 sm:px-3">
+                <Heart className="h-4 w-4 shrink-0" />
+                <span className="truncate">Favoris</span>
                 {wishlist.length > 0 && (
-                  <Badge className="bg-red-500/15 text-red-500 text-xs">{wishlist.length}</Badge>
+                  <Badge className="bg-red-500/15 text-red-500 text-[10px] hidden sm:inline-flex">{wishlist.length}</Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="mentor" className="gap-1.5 text-xs sm:text-sm py-2">
-                <MessageCircle className="h-4 w-4 hidden sm:block" />
-                <span>Mentor</span>
+              <TabsTrigger value="mentor" className="flex-col sm:flex-row gap-0.5 sm:gap-1.5 text-[10px] sm:text-sm py-2 px-1 sm:px-3">
+                <MessageCircle className="h-4 w-4 shrink-0" />
+                <span className="truncate">Mentor</span>
               </TabsTrigger>
-              <TabsTrigger value="profil" className="gap-1.5 text-xs sm:text-sm py-2">
-                <User className="h-4 w-4 hidden sm:block" />
-                <span>Profil</span>
+              <TabsTrigger value="profil" className="flex-col sm:flex-row gap-0.5 sm:gap-1.5 text-[10px] sm:text-sm py-2 px-1 sm:px-3">
+                <User className="h-4 w-4 shrink-0" />
+                <span className="truncate">Profil</span>
               </TabsTrigger>
             </TabsList>
 

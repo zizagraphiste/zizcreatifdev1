@@ -2,9 +2,10 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { session, loading } = useAuth();
+  const { session, userRole, loading } = useAuth();
 
-  if (loading) {
+  // Attendre si : chargement en cours OU session présente mais rôle pas encore résolu
+  if (loading || (session && userRole === null)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <span className="text-muted-foreground animate-pulse">Chargement…</span>
@@ -22,7 +23,8 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 export function AdminRoute({ children }: { children: React.ReactNode }) {
   const { session, userRole, loading } = useAuth();
 
-  if (loading) {
+  // Attendre si : chargement en cours OU session présente mais rôle pas encore résolu
+  if (loading || (session && userRole === null)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <span className="text-muted-foreground animate-pulse">Chargement…</span>

@@ -228,7 +228,7 @@ export default function AdminProducts() {
     img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgData)));
   };
 
-  const typeLabels: Record<string, string> = { guide: "Guide", masterclass: "Masterclass", app: "App", book: "Livre", formation: "Formation" };
+  const typeLabels: Record<string, string> = { guide: "Guide", app: "App", book: "Livre", formation: "Formation" };
   const statusBadge = (s: string) => {
     const map: Record<string, string> = {
       draft: "bg-muted text-muted-foreground",
@@ -238,7 +238,7 @@ export default function AdminProducts() {
     return <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${map[s] || map.draft}`}>{s === "draft" ? "Brouillon" : s === "active" ? "Actif" : "Fermé"}</span>;
   };
 
-  const showAttendanceFields = form.type === "masterclass" || form.type === "formation";
+  const showAttendanceFields = form.type === "formation";
 
   if (loading) return <div className="flex items-center justify-center py-20 text-muted-foreground animate-pulse">Chargement…</div>;
 
@@ -410,7 +410,6 @@ export default function AdminProducts() {
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="guide">Guide</SelectItem>
-                    <SelectItem value="masterclass">Masterclass</SelectItem>
                     <SelectItem value="book">Livre</SelectItem>
                     <SelectItem value="app">App</SelectItem>
                   </SelectContent>
@@ -451,7 +450,7 @@ export default function AdminProducts() {
               </Select>
             </div>
 
-            {/* Attendance mode for masterclass/formation */}
+            {/* Attendance mode for formation */}
             {showAttendanceFields && (
               <div className="space-y-3 rounded-lg border border-border p-4">
                 <Label className="text-foreground font-semibold">Mode de participation</Label>
