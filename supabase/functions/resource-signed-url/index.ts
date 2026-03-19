@@ -59,10 +59,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Check access grant
+    // Check access grant (actif, non expiré)
+    const now = new Date();
     const { data: grant } = await supabaseAdmin
       .from("access_grants")
-      .select("available_at")
+      .select("available_at, expires_at")
       .eq("user_id", user.id)
       .eq("product_id", resource.product_id)
       .limit(1);
@@ -75,8 +76,16 @@ Deno.serve(async (req) => {
     }
 
     const avAt = grant[0].available_at ? new Date(grant[0].available_at) : null;
-    if (avAt && avAt > new Date()) {
+    if (avAt && avAt > now) {
       return new Response(JSON.stringify({ error: "Pas encore disponible" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const exAt = grant[0].expires_at ? new Date(grant[0].expires_at) : null;
+    if (exAt && exAt < now) {
+      return new Response(JSON.stringify({ error: "Accès expiré" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -89,10 +98,10 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Generate signed URL
+    // Generate signed URL (TTL 10 min pour limiter l'accès post-révocation)
     const { data: signedUrl, error: signErr } = await supabaseAdmin.storage
       .from("resources")
-      .createSignedUrl(resource.file_path, 3600);
+      .createSignedUrl(resource.file_path, 600);
 
     if (signErr || !signedUrl) {
       return new Response(JSON.stringify({ error: "Erreur génération URL" }), {

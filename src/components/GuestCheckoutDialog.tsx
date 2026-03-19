@@ -169,7 +169,12 @@ export function GuestCheckoutDialog({ open, onOpenChange, product, preselected }
       if (error) throw error;
 
       if (promoApplied) {
-        await supabase.rpc("increment_promo_usage" as any, { promo_id: promoApplied.id } as any);
+        const { data: promoOk } = await supabase.rpc("increment_promo_usage" as any, { promo_id: promoApplied.id } as any);
+        if (promoOk === false) {
+          // Limite atteinte entre la vérification et le checkout (race condition)
+          toast.error("Ce code promo a atteint sa limite d'utilisation. Le prix normal s'applique.");
+          // On continue sans annuler l'inscription (le montant stocké est déjà correct côté DB)
+        }
       }
 
       // Notify admin
@@ -189,11 +194,25 @@ export function GuestCheckoutDialog({ open, onOpenChange, product, preselected }
         );
       }
 
-      toast.success("Inscription enregistrée ✓");
       onOpenChange(false);
 
       if (finalPrice === 0) {
-        toast.success("Ce produit est gratuit ! Tu recevras un email de confirmation.");
+        if (user) {
+          // User connecté + produit gratuit → confirmation + access_grant immédiat
+          await supabase
+            .from("registrations")
+            .update({ status: "confirmed", confirmed_at: new Date().toISOString() })
+            .eq("id", data.id);
+          await supabase.from("access_grants").upsert(
+            { user_id: user.id, product_id: product.id, available_at: new Date().toISOString() },
+            { onConflict: "user_id,product_id" }
+          );
+          toast.success("Accès activé ! Retrouve ton produit dans ton espace membre.");
+          navigate("/member");
+        } else {
+          // Guest gratuit → l'admin confirmera manuellement
+          toast.success("Inscription enregistrée ! Tu recevras un email de confirmation.");
+        }
       } else {
         navigate(`/payment/${data.id}`);
       }

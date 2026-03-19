@@ -30,8 +30,9 @@ Deno.serve(async (req) => {
   try {
     const WAVE_WEBHOOK_SECRET = Deno.env.get("WAVE_WEBHOOK_SECRET");
     if (!WAVE_WEBHOOK_SECRET) {
-      console.error("WAVE_WEBHOOK_SECRET not set");
-      return new Response("OK", { status: 200, headers: corsHeaders });
+      console.error("WAVE_WEBHOOK_SECRET not configured — paiements non traités !");
+      // Retourner 500 pour que Wave retente au lieu d'ignorer silencieusement
+      return new Response("Configuration error", { status: 500, headers: corsHeaders });
     }
 
     const bodyText = await req.text();
@@ -93,18 +94,19 @@ Deno.serve(async (req) => {
       })
       .eq("id", clientReference);
 
-    // Create access_grant
-    const product = reg.products as any;
-    const availableAt =
-      product.delivery_mode === "scheduled" && product.delivery_date
-        ? product.delivery_date
-        : new Date().toISOString();
+    // Create access_grant (upsert pour éviter les doublons si admin a déjà confirmé)
+    if (reg.user_id) {
+      const product = reg.products as any;
+      const availableAt =
+        product?.delivery_mode === "scheduled" && product?.delivery_date
+          ? product.delivery_date
+          : new Date().toISOString();
 
-    await supabase.from("access_grants").insert({
-      user_id: reg.user_id,
-      product_id: reg.product_id,
-      available_at: availableAt,
-    });
+      await supabase.from("access_grants").upsert(
+        { user_id: reg.user_id, product_id: reg.product_id, available_at: availableAt },
+        { onConflict: "user_id,product_id" }
+      );
+    }
 
     console.log(`Webhook: Registration ${clientReference} confirmed via Wave`);
 

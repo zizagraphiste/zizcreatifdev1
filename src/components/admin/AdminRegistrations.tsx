@@ -124,16 +124,11 @@ export default function AdminRegistrations() {
       const availableAt = reg.product_delivery_mode === "scheduled" && reg.product_delivery_date
         ? reg.product_delivery_date
         : new Date().toISOString();
-      const { error: grantError } = await supabase.from("access_grants").insert({
-        user_id: reg.user_id,
-        product_id: reg.product_id,
-        available_at: availableAt,
-      });
-      if (grantError && !grantError.message.includes("duplicate")) {
-        toast.error(grantError.message);
-        setProcessingId(null);
-        return;
-      }
+      const { error: grantError } = await supabase.from("access_grants").upsert(
+        { user_id: reg.user_id, product_id: reg.product_id, available_at: availableAt },
+        { onConflict: "user_id,product_id" }
+      );
+      if (grantError) { toast.error(grantError.message); setProcessingId(null); return; }
     }
 
     // ── Email de confirmation au client ──────────────────────────────────────
@@ -199,12 +194,12 @@ export default function AdminRegistrations() {
         ? restoreTarget.product_delivery_date
         : new Date().toISOString();
       const expiresAt = addDuration(restoreDuration);
-      await supabase.from("access_grants").insert({
+      await supabase.from("access_grants").upsert({
         user_id: restoreTarget.user_id,
         product_id: restoreTarget.product_id,
         available_at: availableAt,
-        ...(expiresAt ? { expires_at: expiresAt.toISOString() } : {}),
-      } as any).select();
+        ...(expiresAt ? { expires_at: expiresAt.toISOString() } : { expires_at: null }),
+      } as any, { onConflict: "user_id,product_id" });
     }
 
     const durationLabel = RESTORE_DURATIONS.find(d => d.value === restoreDuration)?.label || "";
