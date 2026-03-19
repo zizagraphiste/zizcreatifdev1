@@ -82,11 +82,13 @@ export default function AdminEmails() {
         <p style="color:#888;font-size:12px">ZizCreatif · zizcreatif.dev</p>
       </div>`;
 
-      const { error } = await supabase.functions.invoke("send-email", {
+      const { data, error } = await supabase.functions.invoke("send-email", {
         body: { to: recipients, subject: subject.trim(), html },
       });
 
-      const status = error ? "error" : "sent";
+      // L'edge function peut renvoyer un objet { error: ... } même sans erreur HTTP
+      const resendError = error || data?.error;
+      const status = resendError ? "error" : "sent";
 
       // Persiste dans email_logs
       await supabase.from("email_logs").insert({
@@ -96,8 +98,11 @@ export default function AdminEmails() {
         recipients_count: recipients.length,
       } as any);
 
-      if (error) {
-        toast.error("Erreur lors de l'envoi");
+      if (resendError) {
+        const msg = typeof resendError === "string"
+          ? resendError
+          : resendError?.message || JSON.stringify(resendError);
+        toast.error(`Erreur Resend : ${msg}`);
       } else {
         toast.success(`Email envoyé à ${recipients.length} destinataire${recipients.length > 1 ? "s" : ""}`);
         setSubject("");
