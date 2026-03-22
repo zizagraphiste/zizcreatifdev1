@@ -19,7 +19,7 @@ import {
   Diamond, Crown, Gift, Clock, Utensils, ChefHat, Mic,
   Monitor, Mountain, Waves, Dumbbell, Brain, Lightbulb,
   Compass, Sparkles, GraduationCap, TreePine, Wine, Tent,
-  Home, Bike, Sunset, Shirt, Bell, Palette,
+  Home, Bike, Sunset, Shirt, Bell, Palette, BellRing,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -369,6 +369,7 @@ type Activity = {
   cover_image_url: string | null;
   thumbnail_emoji: string | null;
   extra_config: Record<string, any> | null;
+  waitlist_mode: boolean;
 };
 
 const EMPTY_FORM = {
@@ -386,7 +387,8 @@ const EMPTY_FORM = {
   max_spots: 0,
   thumbnail_emoji: "",
   cover_image_url: null as string | null,
-  status: "active",
+  status: "draft",
+  waitlist_mode: false,
   extra_config: {} as Record<string, any>,
 };
 
@@ -456,8 +458,9 @@ export default function AdminActivites() {
       max_spots: a.max_spots,
       thumbnail_emoji: a.thumbnail_emoji || "",
       cover_image_url: a.cover_image_url || null,
-      status: a.status || "active",
+      status: a.status || "draft",
       extra_config: (a.extra_config as Record<string, any>) || {},
+      waitlist_mode: (a as any).waitlist_mode ?? false,
     });
     setDialogOpen(true);
   };
@@ -499,6 +502,7 @@ export default function AdminActivites() {
       status: form.status,
       delivery_mode: "scheduled",
       extra_config: Object.keys(form.extra_config).length > 0 ? form.extra_config : null,
+      waitlist_mode: (form as any).waitlist_mode ?? false,
     };
 
     const { error } = editing
@@ -544,6 +548,38 @@ export default function AdminActivites() {
   const toggleStatus = async (a: Activity) => {
     const next = a.status === "active" ? "draft" : "active";
     await supabase.from("products").update({ status: next }).eq("id", a.id);
+
+    if (next === "active") {
+      const { data: entries } = await supabase
+        .from("waitlist_entries" as any)
+        .select("id, user_id")
+        .eq("product_id", a.id)
+        .is("notified_at", null) as any;
+
+      if (entries?.length) {
+        const notifications = entries
+          .filter((e: any) => e.user_id)
+          .map((e: any) => ({
+            user_id: e.user_id,
+            category: "product",
+            title: `"${a.title}" est disponible !`,
+            body: "L'activité que tu attendais est maintenant ouverte aux inscriptions.",
+            link: `/product/${a.id}`,
+          }));
+        if (notifications.length > 0) {
+          await supabase.from("member_notifications" as any).insert(notifications);
+        }
+        const ids = entries.map((e: any) => e.id);
+        await supabase.from("waitlist_entries" as any).update({ notified_at: new Date().toISOString() }).in("id", ids);
+        if (notifications.length > 0) {
+          toast.success(`Activité publiée · ${notifications.length} membre${notifications.length > 1 ? "s" : ""} notifié${notifications.length > 1 ? "s" : ""}`);
+        } else {
+          toast.success("Activité publiée");
+        }
+      } else {
+        toast.success("Activité publiée");
+      }
+    }
     fetchActivities();
   };
 
@@ -1154,6 +1190,18 @@ export default function AdminActivites() {
                 <p className="text-xs text-muted-foreground">Brouillon = non visible au public</p>
               </div>
               <Switch checked={form.status === "active"} onCheckedChange={(v) => setField("status", v ? "active" : "draft")} />
+            </div>
+
+            {/* Waitlist */}
+            <div className="flex items-center justify-between rounded-xl border border-border p-3">
+              <div className="flex items-center gap-3">
+                <BellRing className="h-4 w-4 text-primary shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-foreground">Liste d'attente</p>
+                  <p className="text-xs text-muted-foreground">Les visiteurs s'inscrivent et reçoivent une notif à la publication</p>
+                </div>
+              </div>
+              <Switch checked={(form as any).waitlist_mode ?? false} onCheckedChange={(v) => setField("waitlist_mode", v)} />
             </div>
 
             <div className="flex gap-3 pt-2">

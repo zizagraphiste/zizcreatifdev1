@@ -9,12 +9,13 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Plus, Pencil, Trash2, ImagePlus, Users, Clock, MapPin, Link as LinkIcon } from "lucide-react";
+import { CalendarIcon, Plus, Pencil, Trash2, ImagePlus, Users, Clock, MapPin, Link as LinkIcon, BellRing } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 
 type Category = { id: string; name: string };
 
@@ -36,6 +37,7 @@ type Formation = {
   online_link: string | null;
   event_time: string | null;
   date_mode: string | null;
+  waitlist_mode: boolean;
 };
 
 const emptyForm = {
@@ -53,6 +55,7 @@ const emptyForm = {
   event_time: "",
   date_mode: "waitlist" as string,
   conditions: "",
+  waitlist_mode: true,
 };
 
 export default function AdminFormations() {
@@ -108,6 +111,7 @@ export default function AdminFormations() {
       event_time: f.event_time || "",
       date_mode: f.date_mode || "waitlist",
       conditions: parts[1] || "",
+      waitlist_mode: f.waitlist_mode ?? true,
     });
     setDialogOpen(true);
   };
@@ -153,6 +157,7 @@ export default function AdminFormations() {
       event_time: form.event_time.trim() || null,
       date_mode: form.date_mode,
       currency: "XOF",
+      waitlist_mode: form.waitlist_mode,
     };
 
     if (editing) {
@@ -180,7 +185,38 @@ export default function AdminFormations() {
     const next = f.status === "active" ? "draft" : "active";
     const { error } = await supabase.from("products").update({ status: next }).eq("id", f.id);
     if (error) { toast.error(error.message); return; }
-    toast.success(`Formation ${next === "active" ? "activée" : "désactivée"}`);
+
+    // Notifier in-app les inscrits sur la waitlist quand on publie
+    if (next === "active") {
+      const { data: entries } = await supabase
+        .from("waitlist_entries" as any)
+        .select("id, user_id, email")
+        .eq("product_id", f.id)
+        .is("notified_at", null) as any;
+
+      if (entries?.length) {
+        const notifications = entries
+          .filter((e: any) => e.user_id)
+          .map((e: any) => ({
+            user_id: e.user_id,
+            category: "product",
+            title: `"${f.title}" est disponible !`,
+            body: "La formation que tu attendais est maintenant ouverte aux inscriptions.",
+            link: `/product/${f.id}`,
+          }));
+        if (notifications.length > 0) {
+          await supabase.from("member_notifications" as any).insert(notifications);
+        }
+        // Marquer comme notifiés
+        const ids = entries.map((e: any) => e.id);
+        await supabase.from("waitlist_entries" as any).update({ notified_at: new Date().toISOString() }).in("id", ids);
+        toast.success(`Formation activée · ${notifications.length} membre${notifications.length > 1 ? "s" : ""} notifié${notifications.length > 1 ? "s" : ""}`);
+      } else {
+        toast.success("Formation activée");
+      }
+    } else {
+      toast.success("Formation désactivée");
+    }
     fetchFormations();
   };
 
@@ -402,11 +438,23 @@ export default function AdminFormations() {
               <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="draft">Brouillon</SelectItem>
-                  <SelectItem value="active">Actif</SelectItem>
+                  <SelectItem value="draft">Brouillon (non visible)</SelectItem>
+                  <SelectItem value="active">Actif (visible)</SelectItem>
                   <SelectItem value="closed">Fermé</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* Waitlist */}
+            <div className="flex items-center justify-between rounded-xl border border-border p-4">
+              <div className="flex items-center gap-3">
+                <BellRing className="h-4 w-4 text-primary" />
+                <div>
+                  <p className="font-medium text-sm text-foreground">Liste d'attente</p>
+                  <p className="text-xs text-muted-foreground">Les visiteurs peuvent s'inscrire avant la publication</p>
+                </div>
+              </div>
+              <Switch checked={form.waitlist_mode} onCheckedChange={(v) => setForm({ ...form, waitlist_mode: v })} />
             </div>
 
             <Button onClick={handleSave} className="w-full">{editing ? "Enregistrer" : "Créer la formation"}</Button>
