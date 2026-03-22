@@ -9,7 +9,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Plus, Pencil, Trash2, ImagePlus, Share2, Copy, Check, Download } from "lucide-react";
+import { CalendarIcon, Plus, Pencil, Trash2, ImagePlus, Share2, Copy, Check, Download, BellRing } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -40,6 +41,7 @@ type Product = {
   event_time: string | null;
   date_mode: string | null;
   slug: string | null;
+  waitlist_mode: boolean;
 };
 
 const slugify = (str: string) =>
@@ -66,6 +68,7 @@ const emptyForm = {
   event_time: "",
   date_mode: "fixed" as string,
   slug: "",
+  waitlist_mode: false,
 };
 
 export default function AdminProducts() {
@@ -120,6 +123,7 @@ export default function AdminProducts() {
       event_time: p.event_time || "",
       date_mode: p.date_mode || "fixed",
       slug: p.slug || "",
+      waitlist_mode: p.waitlist_mode ?? false,
     });
     setDialogOpen(true);
   };
@@ -166,6 +170,7 @@ export default function AdminProducts() {
       event_time: form.event_time.trim() || null,
       date_mode: form.date_mode,
       slug: finalSlug || null,
+      waitlist_mode: form.waitlist_mode,
     };
 
     if (editing) {
@@ -532,6 +537,21 @@ export default function AdminProducts() {
                   </div>
                 </div>
               </RadioGroup>
+            </div>
+
+            {/* Waitlist mode */}
+            <div className="flex items-center justify-between rounded-xl border border-border p-4">
+              <div className="flex items-center gap-3">
+                <BellRing className="h-4 w-4 text-primary" />
+                <div>
+                  <p className="font-medium text-sm text-foreground">Liste d'attente</p>
+                  <p className="text-xs text-muted-foreground">Affiche un formulaire d'inscription sur la page produit</p>
+                </div>
+              </div>
+              <Switch
+                checked={form.waitlist_mode}
+                onCheckedChange={(v) => setForm({ ...form, waitlist_mode: v })}
+              />
             </div>
 
             <Button onClick={handleSave} className="w-full" disabled={uploading}>

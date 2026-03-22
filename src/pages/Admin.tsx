@@ -16,6 +16,7 @@ import AdminComptabilite from "@/components/admin/AdminComptabilite";
 import AdminActivites from "@/components/admin/AdminActivites";
 import AdminProfilePage from "@/components/admin/AdminProfilePage";
 import AdminUsers from "@/components/admin/AdminUsers";
+import AdminWaitlist from "@/components/admin/AdminWaitlist";
 
 export default function Admin() {
   return (
@@ -28,6 +29,7 @@ export default function Admin() {
         <Route path="activites" element={<AdminActivites />} />
         <Route path="users" element={<AdminUsers />} />
         <Route path="registrations" element={<AdminRegistrations />} />
+        <Route path="waitlist" element={<AdminWaitlist />} />
         <Route path="comptabilite" element={<AdminComptabilite />} />
         <Route path="resources" element={<AdminResources />} />
         <Route path="emails" element={<AdminEmails />} />

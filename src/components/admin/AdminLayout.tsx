@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Package, Users, FolderOpen, Mail, LogOut,
   Home, FileText, Tags, Ticket, MessageCircle, GraduationCap,
   Smartphone, TrendingUp, Menu, X, CalendarHeart, ChevronLeft, ChevronRight,
-  UserCheck, CreditCard,
+  UserCheck, CreditCard, BellRing,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { AvatarCircle } from "@/components/ui/AvatarCircle";
@@ -22,6 +22,7 @@ const navItems = [
   // ── Communauté ──
   { label: "Utilisateurs", path: "/admin/users", icon: UserCheck },
   { label: "Réservations & Paiements", path: "/admin/registrations", icon: CreditCard },
+  { label: "Liste d'attente", path: "/admin/waitlist", icon: BellRing },
   { label: "Comptabilité", path: "/admin/comptabilite", icon: TrendingUp },
   // ── Relation ──
   { label: "Mentor", path: "/admin/mentor", icon: MessageCircle },

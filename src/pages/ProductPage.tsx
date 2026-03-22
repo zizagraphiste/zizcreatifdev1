@@ -6,18 +6,20 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
   ArrowLeft, ArrowRight, Lock, Unlock, ExternalLink, Download,
   BookOpen, ClipboardCheck, MapPin, Video, Calendar, Clock,
   UserCheck, Users, ImageOff, Share2, Copy, Check,
   Utensils, TreePine, Rocket, Wine, Shirt, Moon,
-  Mic, ThumbsUp,
+  Mic, ThumbsUp, Bell, BellRing,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import QRCode from "react-qr-code";
 import { GuestCheckoutDialog } from "@/components/GuestCheckoutDialog";
 import { CoachingBookingWidget, type CoachingPreselected } from "@/components/CoachingBookingWidget";
 import { DRESS_CODES } from "@/constants/activities";
+import { toast } from "sonner";
 
 type Product = {
   id: string;
@@ -40,6 +42,8 @@ type Product = {
   date_mode: string | null;
   delivery_mode: string | null;
   extra_config: Record<string, any> | null;
+  waitlist_mode: boolean | null;
+  slug: string | null;
 };
 
 type Module = {
@@ -76,6 +80,10 @@ export default function ProductPage() {
   const [voteCount, setVoteCount] = useState(0);
   const [hasVoted, setHasVoted] = useState(false);
   const [voteLoading, setVoteLoading] = useState(false);
+  const [waitlistEmail, setWaitlistEmail] = useState(() => "");
+  const [waitlistName, setWaitlistName] = useState("");
+  const [waitlistDone, setWaitlistDone] = useState(false);
+  const [waitlistLoading, setWaitlistLoading] = useState(false);
 
   const handleCheckoutOpenChange = (open: boolean) => {
     setCheckoutOpen(open);
@@ -89,7 +97,7 @@ export default function ProductPage() {
     (async () => {
       const query = supabase
         .from("products")
-        .select("id, title, description, thumbnail_emoji, cover_image_url, price, currency, max_spots, spots_taken, status, type, attendance_mode, venue, online_link, event_time, delivery_date, end_date, date_mode, delivery_mode, extra_config");
+        .select("id, title, description, thumbnail_emoji, cover_image_url, price, currency, max_spots, spots_taken, status, type, attendance_mode, venue, online_link, event_time, delivery_date, end_date, date_mode, delivery_mode, extra_config, waitlist_mode, slug");
 
       const { data: p } = await (isUUID(identifier)
         ? query.eq("id", identifier).single()
@@ -181,6 +189,8 @@ export default function ProductPage() {
   const unlimited = product.max_spots === 0;
   const spotsLeft = unlimited ? Infinity : product.max_spots - (product.spots_taken || 0);
   const isClosed = product.status === "closed" || (!unlimited && spotsLeft <= 0);
+  const isDraft = product.status === "draft";
+  const showWaitlist = product.waitlist_mode === true || isDraft || (isClosed && product.date_mode === "waitlist");
   const isFree = product.price === 0;
   const freeModules = modules.filter(m => m.is_free);
   const paidModulesCount = modules.length - freeModules.length;
@@ -512,6 +522,91 @@ export default function ProductPage() {
             </motion.div>
           );
         })()}
+
+        {/* ── Waiting list ── */}
+        {showWaitlist && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.22 }}
+            className="rounded-2xl border-2 border-primary/30 bg-primary/5 p-6 space-y-4"
+          >
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
+                <BellRing className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <p className="font-bold text-foreground">
+                  {isDraft ? "Bientôt disponible — sois le premier informé !" : "Complet — rejoins la liste d'attente"}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {isDraft
+                    ? "Ce produit n'est pas encore disponible. Laisse ton email pour être averti dès le lancement."
+                    : "Les places sont complètes. Inscris-toi pour être prévenu si une place se libère."}
+                </p>
+              </div>
+            </div>
+
+            {waitlistDone ? (
+              <div className="flex items-center gap-3 rounded-xl bg-green-500/10 border border-green-500/20 p-4">
+                <Check className="h-5 w-5 text-green-500 shrink-0" />
+                <p className="text-sm font-medium text-green-700 dark:text-green-400">
+                  Tu es sur la liste ! On te préviendra dès que c'est disponible.
+                </p>
+              </div>
+            ) : (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!waitlistEmail.trim()) return;
+                  setWaitlistLoading(true);
+                  const entry: Record<string, string> = {
+                    product_id: product.id,
+                    email: waitlistEmail.trim().toLowerCase(),
+                  };
+                  if (waitlistName.trim()) entry.full_name = waitlistName.trim();
+                  if (user) entry.user_id = user.id;
+                  const { error } = await supabase.from("waitlist_entries" as any).insert(entry);
+                  setWaitlistLoading(false);
+                  if (error) {
+                    if (error.code === "23505") {
+                      toast.info("Tu es déjà sur la liste d'attente pour ce produit.");
+                      setWaitlistDone(true);
+                    } else {
+                      toast.error("Une erreur est survenue, réessaie.");
+                    }
+                  } else {
+                    setWaitlistDone(true);
+                    toast.success("Inscription confirmée ! On te préviendra dès le lancement.");
+                  }
+                }}
+                className="space-y-3"
+              >
+                <Input
+                  type="text"
+                  placeholder="Ton prénom (optionnel)"
+                  value={waitlistName}
+                  onChange={(e) => setWaitlistName(e.target.value)}
+                  className="bg-background"
+                />
+                <div className="flex gap-2">
+                  <Input
+                    type="email"
+                    placeholder="Ton email"
+                    required
+                    value={waitlistEmail}
+                    onChange={(e) => setWaitlistEmail(e.target.value)}
+                    className="bg-background flex-1"
+                  />
+                  <Button type="submit" disabled={waitlistLoading} className="shrink-0 gap-2">
+                    <Bell className="h-4 w-4" />
+                    {waitlistLoading ? "..." : "M'avertir"}
+                  </Button>
+                </div>
+              </form>
+            )}
+          </motion.div>
+        )}
 
         {/* CTA / Booking */}
         <motion.div
