@@ -80,10 +80,44 @@ export default function ProductPage() {
   const [voteCount, setVoteCount] = useState(0);
   const [hasVoted, setHasVoted] = useState(false);
   const [voteLoading, setVoteLoading] = useState(false);
-  const [waitlistEmail, setWaitlistEmail] = useState(() => "");
+  const [waitlistEmail, setWaitlistEmail] = useState("");
   const [waitlistName, setWaitlistName] = useState("");
   const [waitlistDone, setWaitlistDone] = useState(false);
   const [waitlistLoading, setWaitlistLoading] = useState(false);
+  const [waitlistAutoJoined, setWaitlistAutoJoined] = useState(false);
+
+  // Auto-inscription sur la waitlist si user connecté
+  useEffect(() => {
+    if (!product || !user) return;
+    const showWaitlistCheck = product.waitlist_mode === true || product.status === "draft" || (product.status === "closed" && product.date_mode === "waitlist");
+    if (!showWaitlistCheck) return;
+
+    (async () => {
+      // Récupérer le profil pour le nom
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("full_name, email")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      const email = (profile as any)?.email || user.email || "";
+      const fullName = (profile as any)?.full_name || "";
+
+      if (!email) return;
+
+      const { error } = await supabase.from("waitlist_entries" as any).insert({
+        product_id: product.id,
+        email,
+        full_name: fullName || null,
+        user_id: user.id,
+      });
+
+      // code 23505 = déjà inscrit → pas d'erreur visible
+      if (!error || error.code === "23505") {
+        setWaitlistAutoJoined(true);
+      }
+    })();
+  }, [product?.id, user?.id]);
 
   const handleCheckoutOpenChange = (open: boolean) => {
     setCheckoutOpen(open);
@@ -541,13 +575,23 @@ export default function ProductPage() {
                 </p>
                 <p className="text-sm text-muted-foreground">
                   {isDraft
-                    ? "Ce produit n'est pas encore disponible. Laisse ton email pour être averti dès le lancement."
-                    : "Les places sont complètes. Inscris-toi pour être prévenu si une place se libère."}
+                    ? "Ce produit n'est pas encore disponible. Tu seras averti(e) dès le lancement."
+                    : "Les places sont complètes. Tu seras prévenu(e) si une place se libère."}
                 </p>
               </div>
             </div>
 
-            {waitlistDone ? (
+            {/* Utilisateur connecté → inscription automatique */}
+            {user ? (
+              <div className="flex items-center gap-3 rounded-xl bg-green-500/10 border border-green-500/20 p-4">
+                <Check className="h-5 w-5 text-green-500 shrink-0" />
+                <p className="text-sm font-medium text-green-700 dark:text-green-400">
+                  {waitlistAutoJoined
+                    ? "Tu es sur la liste ! On te notifiera dès que c'est disponible."
+                    : "Inscription en cours…"}
+                </p>
+              </div>
+            ) : waitlistDone ? (
               <div className="flex items-center gap-3 rounded-xl bg-green-500/10 border border-green-500/20 p-4">
                 <Check className="h-5 w-5 text-green-500 shrink-0" />
                 <p className="text-sm font-medium text-green-700 dark:text-green-400">
@@ -555,18 +599,17 @@ export default function ProductPage() {
                 </p>
               </div>
             ) : (
+              /* Visiteur non connecté → formulaire */
               <form
                 onSubmit={async (e) => {
                   e.preventDefault();
-                  if (!waitlistEmail.trim()) return;
+                  if (!waitlistEmail.trim() || !waitlistName.trim()) return;
                   setWaitlistLoading(true);
-                  const entry: Record<string, string> = {
+                  const { error } = await supabase.from("waitlist_entries" as any).insert({
                     product_id: product.id,
                     email: waitlistEmail.trim().toLowerCase(),
-                  };
-                  if (waitlistName.trim()) entry.full_name = waitlistName.trim();
-                  if (user) entry.user_id = user.id;
-                  const { error } = await supabase.from("waitlist_entries" as any).insert(entry);
+                    full_name: waitlistName.trim(),
+                  });
                   setWaitlistLoading(false);
                   if (error) {
                     if (error.code === "23505") {
@@ -584,7 +627,8 @@ export default function ProductPage() {
               >
                 <Input
                   type="text"
-                  placeholder="Ton prénom (optionnel)"
+                  placeholder="Ton prénom *"
+                  required
                   value={waitlistName}
                   onChange={(e) => setWaitlistName(e.target.value)}
                   className="bg-background"
@@ -592,7 +636,7 @@ export default function ProductPage() {
                 <div className="flex gap-2">
                   <Input
                     type="email"
-                    placeholder="Ton email"
+                    placeholder="Ton email *"
                     required
                     value={waitlistEmail}
                     onChange={(e) => setWaitlistEmail(e.target.value)}
